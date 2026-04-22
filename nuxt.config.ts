@@ -63,6 +63,7 @@ export default defineNuxtConfig({
 
   vite: {
     server: {
+      allowedHosts: ['x.locrun.su'],
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',

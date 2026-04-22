@@ -21,7 +21,7 @@ trigger: always_on
 | Client state | Pinia | auth session, theme, UI-only state |
 | Validation | Zod | schema-first, `z.infer<>` for all types |
 | Fetching | ofetch | native Nuxt, no axios |
-| Icons | @heroicons/vue | no other icon packs |
+| Icons | lucide-vue-next | no other icon packs |
 | Forms | Vee-Validate + Zod | no manual validation logic |
 | Package manager | pnpm | strict mode, `shamefully-hoist=false` |
 
