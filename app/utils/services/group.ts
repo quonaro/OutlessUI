@@ -40,6 +40,14 @@ export async function deleteGroup(id: string, baseURL: string): Promise<void> {
   })
 }
 
+export async function deleteUnavailableGroupNodes(id: string, baseURL: string): Promise<number> {
+  const data = await $fetch<{ deleted?: number }>(`${baseURL}/v1/groups/${id}/nodes/delete-unavailable`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  })
+  return typeof data.deleted === 'number' ? data.deleted : 0
+}
+
 export interface GroupSyncNodeEvent {
   node_id: string
   url: string
@@ -50,6 +58,7 @@ export interface GroupSyncNodeEvent {
 
 export interface GroupSyncDoneEvent {
   synced_at: string
+  deleted_unavailable_count?: number
 }
 
 export function syncGroupStream(

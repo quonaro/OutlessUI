@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, shallowRef } from 'vue'
 import { syncGroupStream, type GroupSyncNodeEvent } from '~/utils/services/group'
 
 export interface SyncNodeStatus {
@@ -15,15 +15,19 @@ export function useGroupSync(groupId: string) {
   const isSyncing = ref(false)
   const error = ref('')
   const syncedAt = ref('')
-  const syncingNodes = ref<Map<string, SyncNodeStatus>>(new Map())
+  const deletedUnavailableCount = ref(0)
+  const isCancelled = ref(false)
+  const syncingNodes = shallowRef<Map<string, SyncNodeStatus>>(new Map())
 
   let source: EventSource | null = null
 
   function startSync() {
     stopSync()
     isSyncing.value = true
+    isCancelled.value = false
     error.value = ''
     syncedAt.value = ''
+    deletedUnavailableCount.value = 0
     syncingNodes.value = new Map()
 
     source = syncGroupStream(groupId, baseURL, {
@@ -34,11 +38,14 @@ export function useGroupSync(groupId: string) {
       },
       onDone: (event) => {
         syncedAt.value = event.synced_at
+        deletedUnavailableCount.value = event.deleted_unavailable_count ?? 0
         isSyncing.value = false
         stopSync()
       },
       onError: (message) => {
         error.value = message
+        isSyncing.value = false
+        stopSync()
       },
     })
   }
@@ -50,12 +57,22 @@ export function useGroupSync(groupId: string) {
     }
   }
 
+  function cancelSync() {
+    if (!isSyncing.value) return
+    isCancelled.value = true
+    isSyncing.value = false
+    stopSync()
+  }
+
   return {
     isSyncing,
+    isCancelled,
     error,
     syncedAt,
+    deletedUnavailableCount,
     syncingNodes,
     startSync,
+    cancelSync,
     stopSync,
   }
 }

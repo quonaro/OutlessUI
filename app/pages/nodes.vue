@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import UiPageLayout from '~/components/ui/page-layout/page-layout.vue'
 import UiButton from '~/components/ui/button/button.vue'
@@ -10,7 +10,7 @@ import CardTitle from '~/components/ui/card/CardTitle.vue'
 import CardContent from '~/components/ui/card/CardContent.vue'
 import CardFooter from '~/components/ui/card/CardFooter.vue'
 import GroupAccordion from '~/components/GroupAccordion.vue'
-import { useNodes } from '~/composables/nodes/useNodes'
+import { useInfiniteNodes } from '~/composables/nodes/useInfiniteNodes'
 import { useGroups } from '~/composables/groups/useGroups'
 import type { Node } from '~/utils/schemas/node'
 import { createNode, deleteNode, probeNode } from '~/utils/services/node'
@@ -24,8 +24,21 @@ type StatusFilter = 'all' | 'healthy' | 'unhealthy' | 'unknown'
 const queryClient = useQueryClient()
 const config = useRuntimeConfig()
 const baseURL = config.public.apiBase as string
-const { data: nodes, isLoading: nodesLoading } = useNodes()
+const {
+  data: nodePages,
+  isLoading: nodesLoading,
+  fetchNextPage,
+  hasNextPage,
+  isFetchingNextPage,
+} = useInfiniteNodes()
 const { data: groups, isLoading: groupsLoading } = useGroups()
+const loadMoreAnchor = ref<HTMLElement | null>(null)
+let observer: IntersectionObserver | null = null
+
+const allNodes = computed<Node[]>(() =>
+  nodePages.value?.pages.flatMap((page) => page.nodes) ?? []
+)
+
 
 const viewMode = ref<ViewMode>('grouped')
 const search = ref('')
@@ -39,6 +52,8 @@ const nodeURLInput = ref('')
 const nodeGroupIDInput = ref('')
 const isCreateGroupSubmitting = ref(false)
 const isCreateNodeSubmitting = ref(false)
+const deletingNodeIDs = ref<Set<string>>(new Set())
+const probingNodeIDs = ref<Set<string>>(new Set())
 
 const createGroupMutation = useMutation({
   mutationFn: (payload: { name: string; source_url: string }) => createGroup(payload, baseURL),
@@ -79,7 +94,7 @@ const groupNameByID = computed<Record<string, string>>(() => {
 })
 
 const filteredFlatNodes = computed<Node[]>(() => {
-  const list = nodes.value ?? []
+  const list = allNodes.value
   const searchValue = search.value.trim().toLowerCase()
   return list.filter((node) => {
     if (statusFilter.value !== 'all' && node.status !== statusFilter.value) {
@@ -115,12 +130,60 @@ function submitCreateNode() {
 
 function removeNode(node: Node) {
   if (!confirm(`Delete node ${node.id}?`)) return
-  deleteNodeMutation.mutate(node.id)
+  const next = new Set(deletingNodeIDs.value)
+  next.add(node.id)
+  deletingNodeIDs.value = next
+  deleteNodeMutation.mutate(node.id, {
+    onSettled: () => {
+      const current = new Set(deletingNodeIDs.value)
+      current.delete(node.id)
+      deletingNodeIDs.value = current
+    },
+  })
 }
 
 function retryNode(node: Node) {
-  probeNodeMutation.mutate(node.id)
+  const next = new Set(probingNodeIDs.value)
+  next.add(node.id)
+  probingNodeIDs.value = next
+  probeNodeMutation.mutate(node.id, {
+    onSettled: () => {
+      const current = new Set(probingNodeIDs.value)
+      current.delete(node.id)
+      probingNodeIDs.value = current
+    },
+  })
 }
+
+function isUnavailable(status: Node['status']): boolean {
+  return status === 'unknown' || status === 'unhealthy'
+}
+
+function maybeLoadMore() {
+  if (hasNextPage.value && !isFetchingNextPage.value) {
+    fetchNextPage()
+  }
+}
+
+onMounted(() => {
+  observer = new IntersectionObserver((entries) => {
+    const hit = entries.some((entry) => entry.isIntersecting)
+    if (hit) {
+      maybeLoadMore()
+    }
+  }, { rootMargin: '250px 0px 250px 0px' })
+
+  if (loadMoreAnchor.value) {
+    observer.observe(loadMoreAnchor.value)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (observer) {
+    observer.disconnect()
+    observer = null
+  }
+})
 </script>
 
 <template>
@@ -159,7 +222,7 @@ function retryNode(node: Node) {
         <GroupAccordion
           v-else-if="viewMode === 'grouped'"
           :groups="groups ?? []"
-          :nodes="nodes ?? []"
+          :nodes="allNodes"
           :search="search"
           :status-filter="statusFilter"
         />
@@ -171,31 +234,51 @@ function retryNode(node: Node) {
                 <div class="min-w-0">
                   <p class="truncate text-sm font-medium">{{ node.url }}</p>
                   <p class="text-xs text-muted-foreground">
-                    {{ node.id }} · {{ groupNameByID[node.group_id] ?? (node.group_id || 'No group') }} · {{ node.status }} · {{ node.latency_ms }} ms
+                    {{ node.id }} · {{ groupNameByID[node.group_id] ?? (node.group_id || 'No group') }} · {{ node.latency_ms }} ms
+                  </p>
+                  <p class="mt-1 text-xs">
+                    <span
+                      class="rounded px-1.5 py-0.5"
+                      :class="node.status === 'healthy'
+                        ? 'bg-emerald-500/15 text-emerald-700'
+                        : node.status === 'unhealthy'
+                          ? 'bg-red-500/15 text-red-700'
+                          : 'bg-amber-500/15 text-amber-700'"
+                    >
+                      {{ node.status }}
+                    </span>
                   </p>
                 </div>
                 <div class="flex gap-1">
                   <UiButton
-                    v-if="node.status === 'unhealthy'"
+                    v-if="isUnavailable(node.status)"
                     variant="outline"
                     size="sm"
-                    :disabled="probeNodeMutation.isPending"
+                    :disabled="probingNodeIDs.has(node.id)"
                     @click="retryNode(node)"
                   >
-                    Retry
+                    {{ probingNodeIDs.has(node.id) ? 'Retrying...' : 'Retry' }}
                   </UiButton>
                   <UiButton
                     variant="destructive"
                     size="sm"
-                    :disabled="deleteNodeMutation.isPending"
+                    :disabled="deletingNodeIDs.has(node.id)"
                     @click="removeNode(node)"
                   >
-                    Delete
+                    {{ deletingNodeIDs.has(node.id) ? 'Deleting...' : 'Delete' }}
                   </UiButton>
                 </div>
               </div>
             </CardContent>
           </UiCard>
+        </div>
+
+        <div
+          ref="loadMoreAnchor"
+          class="h-10 text-center text-xs text-muted-foreground"
+        >
+          <span v-if="isFetchingNextPage">Loading more nodes...</span>
+          <span v-else-if="hasNextPage">Scroll down to load more</span>
         </div>
       </div>
 
