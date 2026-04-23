@@ -53,19 +53,27 @@ const onSubmit = handleSubmit(async (values) => {
 })
 
 onMounted(async () => {
-  if (auth.isAuthenticated) {
+  console.log('[login.vue] onMounted called')
+  console.log('[login.vue] apiBase:', apiBase)
+  console.log('[login.vue] auth.isAuthenticated.value:', auth.isAuthenticated.value)
+
+  if (auth.isAuthenticated.value) {
     navigateTo('/')
     return
   }
 
   try {
+    console.log('[login.vue] Calling getFirstAdminStatus...')
     const status = await getFirstAdminStatus(apiBase)
+    console.log('[login.vue] Status received:', status)
     isBootstrapMode.value = status.can_register
   }
   catch (error) {
+    console.error('[login.vue] Error in getFirstAdminStatus:', error)
     errorMessage.value = 'Failed to load auth state'
   }
   finally {
+    console.log('[login.vue] Setting isInitialLoading to false')
     isInitialLoading.value = false
   }
 })
@@ -98,6 +106,7 @@ onMounted(async () => {
               id="username"
               v-model="username"
               type="text"
+              autocomplete="username"
               placeholder="admin"
               class="bg-input border-border text-foreground placeholder:text-muted-foreground"
             />
@@ -112,6 +121,7 @@ onMounted(async () => {
               id="password"
               v-model="password"
               type="password"
+              autocomplete="current-password"
               placeholder="••••••••"
               class="bg-input border-border text-foreground placeholder:text-muted-foreground"
             />

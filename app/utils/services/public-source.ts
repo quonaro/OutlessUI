@@ -3,12 +3,12 @@ import type { PublicSource } from '~/utils/schemas/public-source'
 import { PublicSourceSchema } from '~/utils/schemas/public-source'
 
 export async function fetchPublicSources(baseURL: string): Promise<PublicSource[]> {
-  const data = await $fetch(`${baseURL}/public-sources`)
+  const data = await $fetch(`${baseURL}/v1/public-sources`)
   return z.array(PublicSourceSchema).parse(data)
 }
 
 export async function createPublicSource(url: string, groupId: string, baseURL: string): Promise<PublicSource> {
-  const data = await $fetch(`${baseURL}/public-sources`, {
+  const data = await $fetch(`${baseURL}/v1/public-sources`, {
     method: 'POST',
     body: { url, group_id: groupId },
   })
@@ -16,7 +16,7 @@ export async function createPublicSource(url: string, groupId: string, baseURL: 
 }
 
 export async function deletePublicSource(id: string, baseURL: string): Promise<void> {
-  await $fetch(`${baseURL}/public-sources/${id}`, {
+  await $fetch(`${baseURL}/v1/public-sources/${id}`, {
     method: 'DELETE',
   })
 }

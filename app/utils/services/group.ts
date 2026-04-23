@@ -2,17 +2,17 @@ import { z } from 'zod'
 import { GroupSchema, CreateGroupSchema, UpdateGroupSchema, type Group, type CreateGroup, type UpdateGroup } from '~/utils/schemas/group'
 
 export async function fetchGroups(baseURL: string): Promise<Group[]> {
-  const data = await $fetch(`${baseURL}/groups`)
+  const data = await $fetch(`${baseURL}/v1/groups`)
   return z.array(GroupSchema).parse(data)
 }
 
 export async function fetchGroup(id: string, baseURL: string): Promise<Group> {
-  const data = await $fetch(`${baseURL}/groups/${id}`)
+  const data = await $fetch(`${baseURL}/v1/groups/${id}`)
   return GroupSchema.parse(data)
 }
 
 export async function createGroup(group: CreateGroup, baseURL: string): Promise<Group> {
-  const data = await $fetch(`${baseURL}/groups`, {
+  const data = await $fetch(`${baseURL}/v1/groups`, {
     method: 'POST',
     body: group,
   })
@@ -20,7 +20,7 @@ export async function createGroup(group: CreateGroup, baseURL: string): Promise<
 }
 
 export async function updateGroup(id: string, group: UpdateGroup, baseURL: string): Promise<Group> {
-  const data = await $fetch(`${baseURL}/groups/${id}`, {
+  const data = await $fetch(`${baseURL}/v1/groups/${id}`, {
     method: 'PUT',
     body: group,
   })
@@ -28,7 +28,7 @@ export async function updateGroup(id: string, group: UpdateGroup, baseURL: strin
 }
 
 export async function deleteGroup(id: string, baseURL: string): Promise<void> {
-  await $fetch(`${baseURL}/groups/${id}`, {
+  await $fetch(`${baseURL}/v1/groups/${id}`, {
     method: 'DELETE',
   })
 }

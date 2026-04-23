@@ -6,7 +6,7 @@ export type AuthResponse = z.infer<typeof AuthResponseSchema>
 export type FirstAdminStatus = z.infer<typeof FirstAdminStatusSchema>
 
 export async function login(credentials: LoginCredentials, baseURL: string): Promise<AuthResponse> {
-  const data = await $fetch(`${baseURL}/auth/login`, {
+  const data = await $fetch(`${baseURL}/v1/auth/login`, {
     method: 'POST',
     body: credentials,
   })
@@ -14,7 +14,7 @@ export async function login(credentials: LoginCredentials, baseURL: string): Pro
 }
 
 export async function registerFirstAdmin(credentials: LoginCredentials, baseURL: string): Promise<AuthResponse> {
-  const data = await $fetch(`${baseURL}/auth/register-first-admin`, {
+  const data = await $fetch(`${baseURL}/v1/auth/register_first_admin`, {
     method: 'POST',
     body: credentials,
   })
@@ -22,6 +22,9 @@ export async function registerFirstAdmin(credentials: LoginCredentials, baseURL:
 }
 
 export async function getFirstAdminStatus(baseURL: string): Promise<FirstAdminStatus> {
-  const data = await $fetch(`${baseURL}/auth/first-admin-status`)
+  const url = `${baseURL}/v1/auth/register_first_admin`
+  console.log('[auth.ts] Fetching URL:', url)
+  const data = await $fetch(url)
+  console.log('[auth.ts] Response data:', data)
   return FirstAdminStatusSchema.parse(data)
 }

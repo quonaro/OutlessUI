@@ -7,14 +7,17 @@ import {
   Globe,
   Layers,
   Users,
-  RefreshCw
+  RefreshCw,
+  LogOut
 } from 'lucide-vue-next'
 
 import { useSidebar } from '~/composables/useSidebar'
+import { useAuth } from '~/composables/useAuth'
 import logoImage from '~/assets/img/logo-d-a.webp'
 import ThemeToggle from './ThemeToggle.vue'
 
 const sidebar = useSidebar()
+const auth = useAuth()
 const route = useRoute()
 
 const navItems = [
@@ -34,6 +37,11 @@ const activeItem = computed(() => {
 
 const handleNavClick = (path: string) => {
   navigateTo(path)
+}
+
+const handleLogout = () => {
+  auth.clearToken()
+  navigateTo('/login')
 }
 
 </script>
@@ -83,6 +91,17 @@ const handleNavClick = (path: string) => {
         </div>
       </template>
     </nav>
+
+    <!-- Logout Button -->
+    <div class="p-4 border-t border-border">
+      <button
+        @click="handleLogout"
+        class="w-full flex items-center gap-3 p-3 rounded-lg transition-colors hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+      >
+        <LogOut class="w-5 h-5 flex-shrink-0" />
+        <span v-if="sidebar.isExpanded" class="font-medium">Logout</span>
+      </button>
+    </div>
 
   </aside>
 </template>
