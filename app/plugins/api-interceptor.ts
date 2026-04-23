@@ -1,5 +1,5 @@
 /// <reference types="nuxt" />
-import { useAuthStore } from '../../stores/auth'
+import { useAuth } from '~/composables/useAuth'
 
 export default defineNuxtPlugin(() => {
   const config = useRuntimeConfig()
@@ -10,18 +10,18 @@ export default defineNuxtPlugin(() => {
     baseURL: apiBase,
     onRequest({ options }) {
       // Add auth token if available
-      const authStore = useAuthStore()
-      if (authStore.token) {
+      const auth = useAuth()
+      if (auth.token) {
         const headers = new Headers(options.headers as HeadersInit)
-        headers.set('Authorization', `Bearer ${authStore.token}`)
+        headers.set('Authorization', `Bearer ${auth.token}`)
         options.headers = headers
       }
     },
     onResponseError({ response }) {
       // Handle 401 unauthorized - clear token and redirect to login
       if (response.status === 401) {
-        const authStore = useAuthStore()
-        authStore.clearToken()
+        const auth = useAuth()
+        auth.clearToken()
         navigateTo('/login')
       }
     },

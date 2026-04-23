@@ -10,11 +10,11 @@ import {
   RefreshCw
 } from 'lucide-vue-next'
 
-import { useSidebarStore } from '../../stores/sidebar'
+import { useSidebar } from '~/composables/useSidebar'
 import logoImage from '~/assets/img/logo-d-a.webp'
 import ThemeToggle from './ThemeToggle.vue'
 
-const sidebar = useSidebarStore()
+const sidebar = useSidebar()
 const route = useRoute()
 
 const navItems = [

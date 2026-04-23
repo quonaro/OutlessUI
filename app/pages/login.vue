@@ -3,13 +3,8 @@ import { useForm } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import { z } from 'zod'
 import { LogIn } from 'lucide-vue-next'
-import Button from '~/components/ui/button/Button.vue'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card'
-import { Input } from '~/components/ui/input'
-import { Label } from '~/components/ui/label'
-import { useAuthStore } from '../../stores/auth'
-import { getFirstAdminStatus, login, registerFirstAdmin } from '../../features/auth/services/auth'
-import ThemeToggle from '~/components/ThemeToggle.vue'
+import { getFirstAdminStatus, login, registerFirstAdmin } from '~/utils/services/auth'
+import { useAuth } from '~/composables/useAuth'
 
 definePageMeta({
   layout: false,
@@ -27,7 +22,10 @@ const { handleSubmit, errors, defineField } = useForm({
 const [username] = defineField('username')
 const [password] = defineField('password')
 
-const authStore = useAuthStore()
+const config = useRuntimeConfig()
+const { apiBase } = config.public
+
+const auth = useAuth()
 const isBootstrapMode = ref(false)
 const isInitialLoading = ref(true)
 const isLoading = ref(false)
@@ -39,9 +37,9 @@ const onSubmit = handleSubmit(async (values) => {
 
   try {
     const response = isBootstrapMode.value
-      ? await registerFirstAdmin(values)
-      : await login(values)
-    authStore.setToken(response.token)
+      ? await registerFirstAdmin(values, apiBase)
+      : await login(values, apiBase)
+    auth.setToken(response.token)
     await navigateTo('/')
   }
   catch (error) {
@@ -55,13 +53,13 @@ const onSubmit = handleSubmit(async (values) => {
 })
 
 onMounted(async () => {
-  if (authStore.isAuthenticated) {
+  if (auth.isAuthenticated) {
     navigateTo('/')
     return
   }
 
   try {
-    const status = await getFirstAdminStatus()
+    const status = await getFirstAdminStatus(apiBase)
     isBootstrapMode.value = status.can_register
   }
   catch (error) {

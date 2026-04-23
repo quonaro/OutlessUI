@@ -1,289 +1,118 @@
 ---
 trigger: always_on
 ---
+
+
+
 # Frontend Next — Architecture Rules & Standards
 
-> Reference guide for the future YourTask frontend rewrite.
-> Stack: Nuxt 4 + Shadcn-vue + TanStack Query + Zod + Pinia.
-> This document is the source of truth when the rewrite begins.
+> Source of truth для ре rewrite фронтенда YourTask.
+> **Stack:** Nuxt 4 (app dir) + Shadcn-vue + TanStack Query + Zod.
 
 ---
 
-## Stack
+## 🏗 Stack & Core Tools
 
 | Layer | Tool | Notes |
 |---|---|---|
-| Framework | Nuxt 4 | `app/` directory structure |
-| Language | TypeScript | strict mode, no `any` |
-| UI | Shadcn-vue | atomic components only |
-| Styling | Tailwind CSS | utility classes only, zero custom CSS |
-| Server state | TanStack Query v5 | reads via `useQuery`, writes via `useMutation` |
-| Client state | Pinia | auth session, theme, UI-only state |
-| Validation | Zod | schema-first, `z.infer<>` for all types |
-| Fetching | ofetch | native Nuxt, no axios |
-| Icons | lucide-vue-next | no other icon packs |
-| Forms | Vee-Validate + Zod | no manual validation logic |
-| Package manager | pnpm | strict mode, `shamefully-hoist=false` |
+| **Framework** | Nuxt 4 | Использование структуры `app/` |
+| **Language** | TypeScript | Strict mode, запрет на `any` |
+| **UI Components** | Shadcn-vue | Атомарные компоненты, правки внутри `ui/` |
+| **Styling** | Tailwind CSS | Zero-CSS policy (никаких `<style>`) |
+| **Server State** | TanStack Query v5 | Кэширование и синхронизация данных |
+| **Client State** | Pinia | Только UI-state, сессия и тема |
+| **Validation** | Zod | Единственный источник правды для типов |
+| **Package Manager**| pnpm | Режим `shamefully-hoist=false` |
 
 ---
 
-## Hard File Size Limits
+## 📏 Hard File Size Limits
 
-| File type | Max lines | Over limit → |
+| File type | Max lines | Action if exceeded |
 |---|---|---|
-| Component (.vue) | 300 | extract logic to `use[FeatureName].ts` |
-| Composable (.ts) | 200 | split by responsibility |
-| Store (Pinia) | 150 | split into multiple stores |
-| Service (.ts) | 150 | split by domain |
+| Component (`.vue`) | **250** | Вынести логику в `composables/` |
+| Composable (`.ts`) | **200** | Разбить на мелкие утилитарные функции |
+| Service (`.ts`) | **150** | Разделить по доменам API |
 
-**STOP and ask before creating any file that will exceed these limits.**
+**STOP:** Перед созданием файла, который заведомо нарушит лимит, необходимо обсуждение архитектуры.
 
 ---
 
-## Directory Structure
+## 📂 Directory Structure (Standard Nuxt 4)
 
-```
-app/                          # Nuxt 4: all frontend code lives here (srcDir)
-  assets/                     # Static assets (CSS, images, fonts)
+Все файлы фронтенда живут в папке `app/`. Используем стандартный авто-импорт Nuxt.
+
+```text
+app/
+  assets/             # Глобальные стили (Tailwind directives) и статика
   components/
-    ui/                       # Shadcn atomic components only. No business logic.
-    [shared-component].vue    # Cross-feature shared components
-  composables/                # Global composables: useAuth, useApi, usePermissions
-  layouts/                    # Page layout templates
-  pages/                      # File-based routing (Nuxt auto-generates routes)
-  middleware/                 # Route guards (auth, permissions)
-  plugins/                    # Nuxt plugins (TanStack Query setup, etc.)
-  utils/                      # Utility functions (helpers, formatters)
-  app.vue                     # Root component
-  error.vue                   # Error page
-
-features/
-  [feature-name]/
-    components/               # Components used only in this feature
-    composables/              # Feature-scoped composables
-    schemas/                  # Zod schemas + inferred TypeScript types
-    services/                 # API call functions for this feature
-
-stores/                       # Pinia stores — client-only global state
-types/                        # Shared TypeScript types
+    ui/               # Shadcn компоненты (без бизнес-логики)
+    shared/           # Общие компоненты (Buttons, Modals)
+    tasks/            # Компоненты фичи Tasks
+    projects/         # Компоненты фичи Projects
+  composables/
+    useAuth.ts        # Глобальные состояния
+    tasks/            # Бизнес-логика конкретных фич
+  layouts/            # Шаблоны страниц
+  middleware/         # Auth guards и роутинг
+  pages/              # Только композиция (минимум логики)
+  plugins/            # TanStack Query, инстансы библиотек
+  utils/
+    schemas/          # Zod схемы и типы (TaskSchema, UserSchema)
+    services/         # Чистые fetch-запросы (fetchTasks, updateTask)
+  app.vue             # Корневой компонент
 ```
-
-Rules:
-- Component used only inside one feature → `features/[name]/components/`, NOT `app/components/`.
-- `app/pages/` contains composition only — no business logic, no API calls directly.
-- `app/composables/` is for global composables only. Feature logic goes in `features/[name]/composables/`.
 
 ---
 
-## Schema-First Development (Zod)
+## 🛡 Data Integrity (Zod)
 
-Every API response must have a Zod schema before writing any component logic.
+**Никаких ручных интерфейсов.** Все типы выводятся из схем.
 
 ```typescript
-// features/tasks/schemas/task.ts
-import { z } from "zod"
-
+// app/utils/schemas/task.ts
 export const TaskSchema = z.object({
   id: z.number(),
-  title: z.string(),
-  status_id: z.number().nullable(),
-  priority: z.enum(["low", "medium", "high", "critical"]),
-  assignee_ids: z.array(z.number()),
-  created_at: z.string().datetime(),
+  title: z.string().min(3),
+  status: z.enum(['todo', 'done'])
 })
 
-// Infer TypeScript type — never write it manually
 export type Task = z.infer<typeof TaskSchema>
-```
 
-**FORBIDDEN:** manually written TypeScript interfaces for API data:
-```typescript
-// FORBIDDEN
-interface Task {
-  id: number
-  title: string
-  // ...
-}
-
-// REQUIRED
-type Task = z.infer<typeof TaskSchema>
-```
-
-Validate at the API boundary:
-```typescript
-// services/tasks.ts
-export async function fetchTask(id: number): Promise<Task> {
-  const raw = await $fetch(`/api/v1/tasks/${id}`)
-  return TaskSchema.parse(raw)  // throws if API contract is broken
+// Использование в сервисе
+export const fetchTask = async (id: number): Promise<Task> => {
+  const data = await $fetch(`/api/tasks/${id}`)
+  return TaskSchema.parse(data) // Валидация на границе
 }
 ```
 
 ---
 
-## Styling — Zero-CSS Policy
+## 🎨 Styling — Zero-CSS Policy
 
-- **FORBIDDEN:** `<style>` blocks in any `.vue` file. No exceptions.
-- **FORBIDDEN:** `:deep()`, `!important`, inline `style=` attributes.
-- **FORBIDDEN:** SCSS/SASS files or imports.
-- **FORBIDDEN:** Custom CSS variables declared in components.
-- **ALLOWED:** Global CSS in `app/assets/` for Tailwind directives only (e.g., `@tailwind base;`).
-
-If a Shadcn component needs visual modification → edit it directly in `app/components/ui/`.
-
-Mobile-first:
-```html
-<!-- WRONG -->
-<div class="w-[1200px] mobile:w-full">
-
-<!-- CORRECT -->
-<div class="w-full md:w-[1200px]">
-```
+* **FORBIDDEN:** Блоки `<style>` в `.vue` файлах.
+* **FORBIDDEN:** Использование SCSS/SASS.
+* **FORBIDDEN:** Атрибуты `style="..."` (инлайн-стили).
+* **REQUIRED:** Только Tailwind классы.
+* **REQUIRED:** Мобильный дизайн в приоритете (Mobile First).
 
 ---
 
-## Vue 3 / Nuxt 4 Patterns
+## 🔄 State Management Rules
 
-```typescript
-// REQUIRED: script setup with TypeScript
-<script setup lang="ts">
-
-// REQUIRED: defineModel for v-model (Vue 3.4+)
-const model = defineModel<string>()
-// FORBIDDEN: manual props + emit('update:modelValue')
-
-// REQUIRED: computed to filter before v-for
-const activeTasks = computed(() => tasks.value.filter(t => !t.archived))
-// FORBIDDEN: v-for + v-if on same element
-
-// REQUIRED: shallowRef for large API list data
-const tasks = shallowRef<Task[]>([])
-// FORBIDDEN: ref([]) for large lists from API
-
-// REQUIRED: defineAsyncComponent for heavy components
-const RichEditor = defineAsyncComponent(() => import('./RichEditor.vue'))
-```
+1.  **Server State (TanStack Query):** Все данные из API (Tasks, Users, Projects).
+    * *Запрещено* хранить данные API в локальном state.
+2.  **Client State (Composables):** Только то, что не живет в БД (Sidebar open, Current Theme, Auth Token).
+    * Использовать `useState` для персистентного состояния между компонентами.
+    * Использовать `useCookie` для токенов и настроек.
+3.  **Local State (ref/reactive):** Только состояние внутри одного компонента (например, `isModalOpen`).
 
 ---
 
-## Data Fetching — TanStack Query
+## 🚀 Nuxt 4 Patterns
 
-```typescript
-// READS — useQuery
-const { data: tasks, isPending, isError } = useQuery({
-  queryKey: ['tasks', projectId],
-  queryFn: ({ signal }) => fetchTasks(projectId, { signal }),
-  staleTime: 5 * 60 * 1000,
-})
+* **`defineModel()`**: Для двусторонней связки (v-model).
+* **`shallowRef()`**: Для больших списков данных из API (оптимизация производительности).
+* **`useAsyncData`**: Только на уровне `pages/` для SSR.
+* **`defineAsyncComponent`**: Для тяжелых чартов, редакторов и модалок.
 
-// WRITES — useMutation
-const { mutate: createTask, isPending: isCreating } = useMutation({
-  mutationFn: (data: TaskCreate) => createTaskApi(data),
-  onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
-})
-```
-
-**FORBIDDEN:**
-```typescript
-const loading = ref(false)   // FORBIDDEN for API state
-const tasks = ref<Task[]>([]) // FORBIDDEN as API data container in Pinia
-```
-
-**Pinia scope:**
-- ✅ Auth session (`useAuthStore`)
-- ✅ Theme (`useThemeStore`)
-- ✅ Sidebar open/close state
-- ❌ Tasks, projects, users — these live in TanStack Query cache only
-
----
-
-## Nuxt 4 SSR Rules
-
-```typescript
-// useAsyncData for SSR-prefetched data (page-level)
-const { data: project } = await useAsyncData(
-  `project-${id}`,
-  () => fetchProject(id)
-)
-
-// useFetch shorthand (auto-key, auto-SSR)
-const { data: user } = await useFetch(`/api/v1/users/${id}`)
-
-// Client-only data (no SSR needed) → useQuery as usual
-```
-
-- `useAsyncData` / `useFetch` for page-level initial data (SSR prefetch).
-- `useQuery` for interactive/user-triggered data (client-side only).
-- Never fetch the same resource in both `useAsyncData` and `useQuery` — pick one.
-
----
-
-## Forms
-
-```typescript
-// REQUIRED: vee-validate + zod
-import { useForm } from 'vee-validate'
-import { toTypedSchema } from '@vee-validate/zod'
-import { z } from 'zod'
-
-const FormSchema = z.object({
-  title: z.string().min(1).max(255),
-  description: z.string().optional(),
-})
-
-const { handleSubmit, errors } = useForm({
-  validationSchema: toTypedSchema(FormSchema),
-})
-
-// FORBIDDEN: manual validation
-// if (!form.title) { error.value = 'Required' }
-```
-
----
-
-## TypeScript Rules
-
-- **FORBIDDEN:** `any` without an explicit `// reason:` comment on the same line.
-- **FORBIDDEN:** `@ts-ignore` without explanation.
-- **FORBIDDEN:** casting with `as SomeType` without a Zod parse boundary.
-- All API shapes → Zod schema → `z.infer<>`. No manual interfaces.
-
----
-
-## Permission Guards
-
-```typescript
-// app/middleware/auth.ts
-export default defineNuxtRouteMiddleware(() => {
-  const { isAuthenticated } = useAuthStore()
-  if (!isAuthenticated) return navigateTo('/login')
-})
-
-// Feature-level permission check
-const { can } = usePermissions()
-if (!can('task:update', projectId)) throw createError({ statusCode: 403 })
-```
-
----
-
-## Migration Protocol (from old Vue 3 codebase)
-
-When porting a feature from the old frontend:
-
-1. **Do NOT copy Naive UI components** — rebuild with Shadcn primitives.
-2. **Extract Zod schemas first** from existing TypeScript interfaces.
-3. **Replace axios calls** with `$fetch` / `useFetch` / `useQuery`.
-4. **Delete all `<style>` blocks** before writing any new code.
-5. If component logic exceeds 300 lines → extract to composable first.
-6. Old Pinia stores that hold server data → replace with `useQuery`.
-
----
-
-## Stop and Ask — mandatory
-
-Stop immediately and ask the user before:
-- Adding any `<style>` block, SCSS, or custom CSS.
-- Creating a component over 300 lines.
-- Using `v-html` (XSS risk).
-- Installing a new pnpm dependency.
-- Using `useAsyncData` and `useQuery` for the same data.
-- Creating a proxy/wrapper component that adds no logic.

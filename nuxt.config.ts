@@ -34,7 +34,6 @@ export default defineNuxtConfig({
 
   modules: [
     '@nuxtjs/color-mode',
-    '@pinia/nuxt',
     '@vueuse/nuxt',
     'shadcn-nuxt',
     '@nuxt/eslint',
@@ -82,10 +81,7 @@ export default defineNuxtConfig({
 
   vite: {
     resolve: {
-      alias: {
-        '~/features': './features',
-        '~/stores': './stores',
-      },
+      alias: {},
     },
     server: {
       allowedHosts: ['x.locrun.su'],

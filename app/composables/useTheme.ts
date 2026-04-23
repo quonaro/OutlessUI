@@ -1,40 +1,45 @@
 import { useColorMode } from '@vueuse/core'
-import { useThemeStore } from '../../stores/theme'
+
+export type Theme = 'light' | 'dark' | 'system'
 
 export function useTheme() {
+  const theme = useState<Theme>('theme', () => 'system')
+
   const colorMode = useColorMode({
     attribute: 'class',
     selector: 'html',
   })
 
-  const themeStore = useThemeStore()
+  const isDark = computed(() => {
+    if (theme.value === 'system') {
+      return colorMode.value === 'dark'
+    }
+    return theme.value === 'dark'
+  })
 
-  const isDark = computed(() => colorMode.value === 'dark')
+  const setTheme = (newTheme: Theme) => {
+    theme.value = newTheme
 
-  const setTheme = (theme: 'light' | 'dark' | 'system') => {
-    themeStore.setTheme(theme)
-
-    if (theme === 'system') {
+    if (newTheme === 'system') {
       colorMode.value = 'auto'
     } else {
-      colorMode.value = theme
+      colorMode.value = newTheme
     }
   }
 
   const toggleTheme = () => {
-    if (colorMode.value === 'dark') {
+    if (theme.value === 'light') {
+      setTheme('dark')
+    } else if (theme.value === 'dark') {
       setTheme('light')
     } else {
-      setTheme('dark')
+      // system preference
+      setTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark')
     }
   }
 
-  // Initialize theme from store on mount
-  onMounted(() => {
-    setTheme(themeStore.theme)
-  })
-
   return {
+    theme: readonly(theme),
     isDark,
     setTheme,
     toggleTheme,
