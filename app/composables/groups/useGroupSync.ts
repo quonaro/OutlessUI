@@ -35,9 +35,9 @@ export interface ProbeUnavailableNodeStatus {
 export function useGroupSync(groupId: string) {
   const queryClient = useQueryClient()
 
-  /** Clears infinite node pages so new/changed rows show without a full reload. */
+  /** Refresh nodes/groups after bulk probe or sync. Use invalidate (not reset) so the nodes query keeps cached pages during refetch — otherwise isLoading flips true, GroupAccordion unmounts, and in-flight probe UI state is lost. */
   function refreshNodesAndGroupsAfterJob() {
-    void queryClient.resetQueries({ queryKey: ['nodes', 'infinite'] })
+    void queryClient.invalidateQueries({ queryKey: ['nodes', 'infinite'] })
     void queryClient.invalidateQueries({ queryKey: ['groups'] })
   }
 

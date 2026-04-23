@@ -16,6 +16,8 @@ export interface UseGroupAccordionFiltersOptions {
   nodes: ComputedRef<Node[]> | (() => Node[])
   search: ComputedRef<string> | (() => string)
   statusFilter: ComputedRef<GlobalStatusFilter> | (() => GlobalStatusFilter)
+  /** When true, nodes are loaded per group in child components — parent passes an empty node list; visibility uses group metadata + search on group fields only. */
+  perGroupNodeSource?: ComputedRef<boolean> | (() => boolean)
 }
 
 function resolve<T>(r: ComputedRef<T> | (() => T)): T {
@@ -45,6 +47,9 @@ export function useGroupAccordionFilters(opts: UseGroupAccordionFiltersOptions) 
   const groups = computed(() => resolve(opts.groups))
   const normalizedSearch = computed(() => resolve(opts.search).trim().toLowerCase())
   const globalStatusFilter = computed(() => resolve(opts.statusFilter))
+  const perGroupNodeSource = computed(() =>
+    opts.perGroupNodeSource ? resolve(opts.perGroupNodeSource) : false,
+  )
 
   const nodesByGroup = computed(() => {
     const map: Record<string, Node[]> = {}
@@ -61,6 +66,10 @@ export function useGroupAccordionFilters(opts: UseGroupAccordionFiltersOptions) 
     const gf = globalStatusFilter.value
     const out: Record<string, Node[]> = {}
     for (const group of groups.value) {
+      if (perGroupNodeSource.value) {
+        out[group.id] = []
+        continue
+      }
       const source = nodesByGroup.value[group.id] ?? []
       out[group.id] = source.filter((node) => {
         if (!matchesGlobalFilter(gf, node)) return false
@@ -73,6 +82,12 @@ export function useGroupAccordionFilters(opts: UseGroupAccordionFiltersOptions) 
   const visibleGroups = computed(() => {
     const search = normalizedSearch.value
     return groups.value.filter((group) => {
+      if (perGroupNodeSource.value) {
+        if (!search) return true
+        if (group.name.toLowerCase().includes(search)) return true
+        if ((group.source_url ?? '').toLowerCase().includes(search)) return true
+        return true
+      }
       const filteredNodes = baseFilteredNodesForGroup.value[group.id] ?? []
       if (!search) return true
       if (group.name.toLowerCase().includes(search)) return true

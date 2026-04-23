@@ -1,17 +1,24 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { Group } from '~/utils/schemas/group'
 import type { Node, NodeStatus } from '~/utils/schemas/node'
 import type { GroupStatusCounts } from '~/composables/groups/useGroupAccordionFilters'
 import type { ProbeUnavailableNodeStatus } from '~/composables/groups/useGroupSync'
+import { useGroupNodesInfinite } from '~/composables/nodes/useGroupNodesInfinite'
 import UiButton from '~/components/ui/button/button.vue'
 import UiCard from '~/components/ui/card/card.vue'
 import CardContent from '~/components/ui/card/CardContent.vue'
-import { countryBadgeLabel } from '~/utils/country'
+import { countryBadgeLabel, normalizeCountryCode } from '~/utils/country'
+
+type PingFilter = 'all' | 'good' | 'ok' | 'bad'
+type StatusFilter = 'all' | 'healthy' | 'unhealthy' | 'unknown'
 
 const props = withDefaults(defineProps<{
   group: Group
-  visibleNodes: Node[]
+  search: string
+  statusFilter: StatusFilter
+  pingFilter: PingFilter
+  countryFilter: string
   metrics: GroupStatusCounts
   isSyncing: boolean
   isCancelled: boolean
@@ -49,6 +56,98 @@ const emit = defineEmits<{
 }>()
 
 const copiedNodeIDs = ref<Set<string>>(new Set())
+
+const {
+  data: nodePages,
+  fetchNextPage,
+  hasNextPage,
+  isFetchingNextPage,
+  isLoading,
+} = useGroupNodesInfinite(() => props.group.id)
+
+const allNodesInGroup = computed(() =>
+  nodePages.value?.pages.flatMap((p) => p.nodes) ?? [],
+)
+
+function statusSortRank(status: NodeStatus): number {
+  if (status === 'healthy') return 0
+  if (status === 'unknown') return 1
+  return 2
+}
+
+function matchesPingFilter(latencyMS: number, filter: PingFilter): boolean {
+  if (filter === 'good') return latencyMS < 100
+  if (filter === 'ok') return latencyMS >= 100 && latencyMS <= 200
+  if (filter === 'bad') return latencyMS > 200
+  return true
+}
+
+const localStatusSelection = computed<NodeStatus[]>(() => {
+  const s: NodeStatus[] = []
+  if (props.localHealthy) s.push('healthy')
+  if (props.localUnhealthy) s.push('unhealthy')
+  if (props.localUnknown) s.push('unknown')
+  return s
+})
+
+const displayNodes = computed(() => {
+  let list = allNodesInGroup.value
+  if (props.statusFilter !== 'all') {
+    list = list.filter((n) => n.status === props.statusFilter)
+  }
+  const q = props.search.trim().toLowerCase()
+  if (q) {
+    list = list.filter((n) =>
+      `${n.url} ${n.id} ${n.country}`.toLowerCase().includes(q),
+    )
+  }
+  list = list.filter((n) => matchesPingFilter(n.latency_ms, props.pingFilter))
+  const want = props.countryFilter.trim()
+  if (want) {
+    const t = normalizeCountryCode(want)
+    list = list.filter((n) => normalizeCountryCode(n.country) === t)
+  }
+  const ls = localStatusSelection.value
+  if (ls.length > 0) {
+    list = list.filter((n) => ls.includes(n.status))
+  }
+  return [...list].sort((a, b) => statusSortRank(a.status) - statusSortRank(b.status))
+})
+
+const scrollRoot = ref<HTMLElement | null>(null)
+const loadSentinel = ref<HTMLElement | null>(null)
+let listObserver: IntersectionObserver | null = null
+
+function maybeLoadMoreInList() {
+  if (!hasNextPage.value || isFetchingNextPage.value) return
+  void fetchNextPage()
+}
+
+watch(
+  [scrollRoot, loadSentinel, () => hasNextPage.value],
+  () => {
+    listObserver?.disconnect()
+    listObserver = null
+    const root = scrollRoot.value
+    const target = loadSentinel.value
+    if (!root || !target) return
+    listObserver = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          maybeLoadMoreInList()
+        }
+      },
+      { root, rootMargin: '160px 0px 160px 0px', threshold: 0 },
+    )
+    listObserver.observe(target)
+  },
+  { flush: 'post' },
+)
+
+onBeforeUnmount(() => {
+  listObserver?.disconnect()
+  listObserver = null
+})
 
 function statusChipClass(status: NodeStatus, active: boolean): string {
   const base = 'rounded-full border px-2 py-0.5 text-xs font-medium transition-colors'
@@ -97,10 +196,16 @@ async function copyNodeURL(node: Node) {
     copiedNodeIDs.value = current
   }, 1200)
 }
+
+const emptyMessage = computed(() => {
+  if (isLoading.value && allNodesInGroup.value.length === 0) return 'Loading nodes…'
+  if (allNodesInGroup.value.length === 0) return 'No nodes in this group'
+  return 'No nodes match the current filters'
+})
 </script>
 
 <template>
-  <details class="rounded-md border bg-card" open>
+  <details class="rounded-md border bg-card">
     <summary class="cursor-pointer list-none bg-muted/25 px-4 py-3">
       <div class="min-w-0">
         <p class="truncate font-medium">
@@ -193,121 +298,134 @@ async function copyNodeURL(node: Node) {
       </UiButton>
     </div>
 
-    <CardContent class="space-y-2 border-t px-4 py-3">
-      <div v-if="props.isCancelled || props.deletedUnavailableCount > 0" class="flex flex-wrap items-center gap-2">
+    <CardContent class="border-t px-0 py-0">
+      <div v-if="props.isCancelled || props.deletedUnavailableCount > 0" class="flex flex-wrap items-center gap-2 px-4 pt-3">
         <p v-if="props.isCancelled" class="text-xs text-amber-600">Sync cancelled</p>
         <p v-else-if="props.deletedUnavailableCount > 0" class="text-xs text-muted-foreground">
           Auto-deleted: {{ props.deletedUnavailableCount }}
         </p>
       </div>
 
-      <p v-if="props.syncError" class="text-xs text-red-500">
+      <p v-if="props.syncError" class="px-4 pt-2 text-xs text-red-500">
         {{ props.syncError }}
       </p>
 
-      <UiCard
-        v-for="node in props.visibleNodes"
-        :key="node.id"
-        class="px-3 py-2"
-        :class="isUnavailable(node.status) ? 'border-red-400/60 bg-red-500/5' : ''"
+      <div
+        ref="scrollRoot"
+        class="max-h-[min(70vh,28rem)] overflow-y-auto overscroll-contain rounded-md border border-border/60 bg-muted/20 px-4 py-3 pr-2 [scrollbar-width:thin] [scrollbar-color:rgba(148,163,184,0.45)_transparent] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/60 hover:[&::-webkit-scrollbar-thumb]:bg-zinc-500/80"
       >
-        <CardContent class="p-0">
-          <div class="flex items-center gap-2">
-            <div class="min-w-0 flex-1">
-              <div class="group relative min-w-0">
-                <p class="truncate text-sm font-medium">{{ node.url }}</p>
-                <div
-                  class="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden max-h-48 w-[min(90vw,40rem)] overflow-y-auto whitespace-pre-wrap break-all rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md group-hover:block"
-                >
-                  {{ node.url }}
+        <div class="space-y-2">
+          <UiCard
+            v-for="node in displayNodes"
+            :key="node.id"
+            class="px-3 py-2"
+            :class="isUnavailable(node.status) ? 'border-red-400/60 bg-red-500/5' : ''"
+          >
+            <CardContent class="p-0">
+              <div class="flex items-center gap-2">
+                <div class="min-w-0 flex-1">
+                  <div class="group relative min-w-0">
+                    <p class="truncate text-sm font-medium">{{ node.url }}</p>
+                    <div
+                      class="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden max-h-48 w-[min(90vw,40rem)] overflow-y-auto whitespace-pre-wrap break-all rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md group-hover:block"
+                    >
+                      {{ node.url }}
+                    </div>
+                  </div>
+                  <p class="text-xs text-muted-foreground">
+                    {{ node.id }}
+                  </p>
+                  <p class="mt-1 text-xs">
+                    <span
+                      class="rounded px-1.5 py-0.5"
+                      :class="node.status === 'healthy'
+                        ? 'bg-emerald-500/15 text-emerald-700'
+                        : node.status === 'unhealthy'
+                          ? 'bg-red-500/15 text-red-700'
+                          : 'bg-amber-500/15 text-amber-700'"
+                    >
+                      {{ node.status }}
+                    </span>
+                    <span
+                      class="ml-2 inline-flex rounded-full border px-2 py-0.5 text-xs font-medium tabular-nums"
+                      :class="latencyBadgeClass(node.latency_ms)"
+                    >
+                      {{ node.latency_ms }} ms
+                    </span>
+                    <span
+                      class="ml-2 inline-flex items-center rounded-full border border-border/80 bg-muted/35 px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground"
+                    >
+                      {{ countryBadgeLabel(props.probeNodeState(node.id)?.country ?? node.country) }}
+                    </span>
+                    <span v-if="props.syncNodeError(node.id)" class="ml-2 text-red-600">
+                      {{ props.syncNodeError(node.id) }}
+                    </span>
+                    <span
+                      v-if="props.probeNodeState(node.id)"
+                      class="ml-2 rounded border px-1.5 py-0.5"
+                      :class="probeStateClass(props.probeNodeState(node.id)!.status)"
+                    >
+                      {{ probeStateLabel(props.probeNodeState(node.id)!.status) }}
+                    </span>
+                  </p>
+                </div>
+                <div class="flex shrink-0 flex-nowrap items-center justify-end gap-1 whitespace-nowrap">
+                  <UiButton
+                    variant="outline"
+                    size="sm"
+                    class="whitespace-nowrap"
+                    @click="copyNodeURL(node)"
+                  >
+                    {{ copiedNodeIDs.has(node.id) ? 'Copied' : 'Copy' }}
+                  </UiButton>
+                  <UiButton
+                    v-if="node.status === 'healthy'"
+                    variant="outline"
+                    size="sm"
+                    class="whitespace-nowrap"
+                    :disabled="props.probingIds.has(node.id)"
+                    @click="emit('retryNode', node)"
+                  >
+                    {{ props.probingIds.has(node.id) ? 'Rechecking...' : 'Recheck' }}
+                  </UiButton>
+                  <UiButton
+                    v-if="isUnavailable(node.status)"
+                    variant="outline"
+                    size="sm"
+                    class="whitespace-nowrap"
+                    :disabled="props.probingIds.has(node.id)"
+                    @click="emit('retryNode', node)"
+                  >
+                    {{ props.probingIds.has(node.id) ? 'Retrying...' : 'Retry' }}
+                  </UiButton>
+                  <UiButton
+                    variant="destructive"
+                    size="sm"
+                    class="whitespace-nowrap"
+                    :disabled="props.deletingIds.has(node.id)"
+                    @click="emit('removeNode', node)"
+                  >
+                    {{ props.deletingIds.has(node.id) ? 'Deleting...' : 'Delete' }}
+                  </UiButton>
                 </div>
               </div>
-              <p class="text-xs text-muted-foreground">
-                {{ node.id }}
-              </p>
-              <p class="mt-1 text-xs">
-                <span
-                  class="rounded px-1.5 py-0.5"
-                  :class="node.status === 'healthy'
-                    ? 'bg-emerald-500/15 text-emerald-700'
-                    : node.status === 'unhealthy'
-                      ? 'bg-red-500/15 text-red-700'
-                      : 'bg-amber-500/15 text-amber-700'"
-                >
-                  {{ node.status }}
-                </span>
-                <span
-                  class="ml-2 inline-flex rounded-full border px-2 py-0.5 text-xs font-medium tabular-nums"
-                  :class="latencyBadgeClass(node.latency_ms)"
-                >
-                  {{ node.latency_ms }} ms
-                </span>
-                <span
-                  class="ml-2 inline-flex items-center rounded-full border border-border/80 bg-muted/35 px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground"
-                >
-                  {{ countryBadgeLabel(props.probeNodeState(node.id)?.country ?? node.country) }}
-                </span>
-                <span v-if="props.syncNodeError(node.id)" class="ml-2 text-red-600">
-                  {{ props.syncNodeError(node.id) }}
-                </span>
-                <span
-                  v-if="props.probeNodeState(node.id)"
-                  class="ml-2 rounded border px-1.5 py-0.5"
-                  :class="probeStateClass(props.probeNodeState(node.id)!.status)"
-                >
-                  {{ probeStateLabel(props.probeNodeState(node.id)!.status) }}
-                </span>
-              </p>
-            </div>
-            <div class="flex shrink-0 flex-nowrap items-center justify-end gap-1 whitespace-nowrap">
-              <UiButton
-                variant="outline"
-                size="sm"
-                class="whitespace-nowrap"
-                @click="copyNodeURL(node)"
-              >
-                {{ copiedNodeIDs.has(node.id) ? 'Copied' : 'Copy' }}
-              </UiButton>
-              <UiButton
-                v-if="node.status === 'healthy'"
-                variant="outline"
-                size="sm"
-                class="whitespace-nowrap"
-                :disabled="props.probingIds.has(node.id)"
-                @click="emit('retryNode', node)"
-              >
-                {{ props.probingIds.has(node.id) ? 'Rechecking...' : 'Recheck' }}
-              </UiButton>
-              <UiButton
-                v-if="isUnavailable(node.status)"
-                variant="outline"
-                size="sm"
-                class="whitespace-nowrap"
-                :disabled="props.probingIds.has(node.id)"
-                @click="emit('retryNode', node)"
-              >
-                {{ props.probingIds.has(node.id) ? 'Retrying...' : 'Retry' }}
-              </UiButton>
-              <UiButton
-                variant="destructive"
-                size="sm"
-                class="whitespace-nowrap"
-                :disabled="props.deletingIds.has(node.id)"
-                @click="emit('removeNode', node)"
-              >
-                {{ props.deletingIds.has(node.id) ? 'Deleting...' : 'Delete' }}
-              </UiButton>
-            </div>
-          </div>
-        </CardContent>
-      </UiCard>
+            </CardContent>
+          </UiCard>
 
-      <p
-        v-if="props.visibleNodes.length === 0"
-        class="py-4 text-center text-sm text-muted-foreground"
-      >
-        No nodes in this group
-      </p>
+          <div ref="loadSentinel" class="h-2 shrink-0" aria-hidden="true" />
+
+          <p v-if="isFetchingNextPage" class="py-1 text-center text-xs text-muted-foreground">
+            Loading more…
+          </p>
+
+          <p
+            v-if="displayNodes.length === 0"
+            class="py-6 text-center text-sm text-muted-foreground"
+          >
+            {{ emptyMessage }}
+          </p>
+        </div>
+      </div>
     </CardContent>
   </details>
 </template>

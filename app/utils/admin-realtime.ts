@@ -20,6 +20,7 @@ function flushPendingSends() {
 type WsPayload = Record<string, unknown>
 
 const groupSyncSubs = new Map<string, Set<(msg: WsPayload) => void>>()
+const globalSubs = new Set<(msg: WsPayload) => void>()
 
 export function setAdminRealtimeQueryClient(q: QueryClient) {
   queryClient = q
@@ -53,9 +54,9 @@ function dispatch(msg: WsPayload) {
     if (Array.isArray(keys)) {
       for (const k of keys) {
         if (typeof k !== 'string') continue
-        // Infinite list keeps stale pages unless fully reset after bulk load / checks.
+        // Invalidate infinite nodes query; avoid resetQueries so the grouped nodes UI does not unmount (reset clears cache -> isLoading -> v-if drops GroupAccordion and loses probe/sync progress state).
         if (k === 'nodes') {
-          void queryClient.resetQueries({ queryKey: ['nodes', 'infinite'] })
+          void queryClient.invalidateQueries({ queryKey: ['nodes', 'infinite'] })
           continue
         }
         void queryClient.invalidateQueries({ queryKey: [k] })
@@ -63,11 +64,19 @@ function dispatch(msg: WsPayload) {
     }
     return
   }
+  for (const cb of [...globalSubs]) cb(msg)
   const gid = typeof msg.group_id === 'string' ? msg.group_id : ''
   if (!gid) return
   const set = groupSyncSubs.get(gid)
   if (!set) return
   for (const cb of [...set]) cb(msg)
+}
+
+export function subscribeAdminRealtime(cb: (msg: WsPayload) => void): () => void {
+  globalSubs.add(cb)
+  return () => {
+    globalSubs.delete(cb)
+  }
 }
 
 export function subscribeGroupSyncChannel(groupId: string, cb: (msg: WsPayload) => void): () => void {

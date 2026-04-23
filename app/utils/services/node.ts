@@ -32,9 +32,18 @@ export async function fetchNodes(baseURL: string): Promise<Node[]> {
   return z.array(NodeSchema).parse(nodes)
 }
 
-export async function fetchNodesPage(baseURL: string, limit: number, offset: number): Promise<NodesPage> {
+export async function fetchNodesPage(
+  baseURL: string,
+  limit: number,
+  offset: number,
+  groupId?: string,
+): Promise<NodesPage> {
+  const query: Record<string, string | number> = { limit, offset }
+  if (groupId) {
+    query.group_id = groupId
+  }
   const data = await $fetch<ListNodesResponse | unknown[]>(`${baseURL}/v1/nodes`, {
-    query: { limit, offset },
+    query,
     headers: getAuthHeaders(),
   })
   const nodesRaw = Array.isArray(data) ? data : (data.nodes ?? [])

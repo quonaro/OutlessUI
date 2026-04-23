@@ -11,9 +11,11 @@ import GroupAccordionItem from '~/components/GroupAccordionItem.vue'
 
 const props = defineProps<{
   groups: Group[]
-  nodes: Node[]
   search: string
   statusFilter: 'all' | 'healthy' | 'unhealthy' | 'unknown'
+  pingFilter: 'all' | 'good' | 'ok' | 'bad'
+  /** ISO country code filter; empty = all */
+  countryFilter: string
 }>()
 
 const queryClient = useQueryClient()
@@ -27,16 +29,16 @@ const togglingAutoDeleteGroupIDs = ref<Set<string>>(new Set())
 
 const {
   visibleGroups,
-  visibleNodesForGroup,
   statusMetricsForGroup,
   toggleLocalStatus,
   isLocalStatusActive,
   clearLocalStatusFilter,
 } = useGroupAccordionFilters({
   groups: () => props.groups,
-  nodes: () => props.nodes,
+  nodes: () => [],
   search: () => props.search,
   statusFilter: () => props.statusFilter,
+  perGroupNodeSource: () => true,
 })
 
 const deleteMutation = useMutation({
@@ -204,7 +206,10 @@ function nodeProbeState(groupID: string, nodeID: string) {
       v-for="group in visibleGroups"
       :key="group.id"
       :group="group"
-      :visible-nodes="visibleNodesForGroup(group)"
+      :search="props.search"
+      :status-filter="props.statusFilter"
+      :ping-filter="props.pingFilter"
+      :country-filter="props.countryFilter"
       :metrics="statusMetricsForGroup(group.id)"
       :is-syncing="syncIsRunning(group.id)"
       :is-cancelled="syncCancelled(group.id)"
