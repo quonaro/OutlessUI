@@ -39,15 +39,18 @@ const handleNavClick = (path: string) => {
 
     <!-- Logo Section -->
     <div class="p-4 border-b border-border">
-      <div class="flex items-center gap-3">
-        <img
-          :src="logoImage"
-          alt="Outless Logo"
-          class="w-12 h-12 flex-shrink-0"
-        />
-        <span v-if="sidebar.isExpanded" class="font-bold text-lg text-foreground">
-          Outless
-        </span>
+      <div class="flex items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <img
+            :src="logoImage"
+            alt="Outless Logo"
+            class="w-12 h-12 flex-shrink-0"
+          />
+          <span v-if="sidebar.isExpanded" class="font-bold text-lg text-foreground">
+            Outless
+          </span>
+        </div>
+        <ThemeToggle />
       </div>
     </div>
 
