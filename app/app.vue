@@ -2,6 +2,8 @@
 useHead({
   title: 'Outless',
 })
+
+useTheme()
 </script>
 
 <template>

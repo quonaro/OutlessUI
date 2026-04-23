@@ -9,6 +9,7 @@ import { Input } from '~/components/ui/input'
 import { Label } from '~/components/ui/label'
 import { useAuthStore } from '../../stores/auth'
 import { getFirstAdminStatus, login, registerFirstAdmin } from '../../features/auth/services/auth'
+import ThemeToggle from '~/components/ThemeToggle.vue'
 
 definePageMeta({
   layout: false,
@@ -73,58 +74,61 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="flex min-h-screen items-center justify-center bg-zinc-950 px-4">
-    <Card class="w-full max-w-md bg-zinc-900 border-zinc-800">
+  <div class="flex min-h-screen items-center justify-center bg-background px-4 relative">
+    <div class="absolute top-4 right-4">
+      <ThemeToggle />
+    </div>
+    <Card class="w-full max-w-md bg-card border-border">
       <CardHeader class="space-y-1">
-        <CardTitle class="text-2xl font-bold text-center text-white">
+        <CardTitle class="text-2xl font-bold text-center text-card-foreground">
           {{ isBootstrapMode ? 'Create First Admin' : 'Admin Login' }}
         </CardTitle>
-        <CardDescription class="text-center text-zinc-400">
+        <CardDescription class="text-center text-muted-foreground">
           {{ isBootstrapMode
             ? 'No admins found. Create the first admin account to continue'
             : 'Enter your credentials to access the admin panel' }}
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <p v-if="isInitialLoading" class="text-sm text-zinc-400 text-center">
+        <p v-if="isInitialLoading" class="text-sm text-muted-foreground text-center">
           Loading...
         </p>
         <form @submit="onSubmit" class="space-y-4">
           <div class="space-y-2">
-            <Label for="username" class="text-zinc-300">Username</Label>
+            <Label for="username" class="text-foreground">Username</Label>
             <Input
               id="username"
               v-model="username"
               type="text"
               placeholder="admin"
-              class="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500"
+              class="bg-input border-border text-foreground placeholder:text-muted-foreground"
             />
-            <p v-if="errors.username" class="text-sm text-red-400">
+            <p v-if="errors.username" class="text-sm text-destructive">
               {{ errors.username }}
             </p>
           </div>
 
           <div class="space-y-2">
-            <Label for="password" class="text-zinc-300">Password</Label>
+            <Label for="password" class="text-foreground">Password</Label>
             <Input
               id="password"
               v-model="password"
               type="password"
               placeholder="••••••••"
-              class="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500"
+              class="bg-input border-border text-foreground placeholder:text-muted-foreground"
             />
-            <p v-if="errors.password" class="text-sm text-red-400">
+            <p v-if="errors.password" class="text-sm text-destructive">
               {{ errors.password }}
             </p>
           </div>
 
-          <p v-if="errorMessage" class="text-sm text-red-400 text-center">
+          <p v-if="errorMessage" class="text-sm text-destructive text-center">
             {{ errorMessage }}
           </p>
 
           <Button
             type="submit"
-            class="w-full bg-white text-black hover:bg-zinc-200"
+            class="w-full bg-primary text-primary-foreground hover:bg-primary/90"
             :disabled="isLoading || isInitialLoading"
           >
             <LogIn v-if="!isLoading" class="mr-2 h-4 w-4" />

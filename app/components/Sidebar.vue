@@ -8,8 +8,10 @@ import {
 
 import { useSidebarStore } from '../../stores/sidebar'
 import logoImage from '~/assets/img/logo-d-a.webp'
+import ThemeToggle from './ThemeToggle.vue'
 
 const sidebar = useSidebarStore()
+const route = useRoute()
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
@@ -18,9 +20,12 @@ const navItems = [
   { id: 'settings', label: 'Settings', icon: Settings, path: '/settings' },
 ]
 
+const activeItem = computed(() => {
+  const activeNav = navItems.find(item => route.path === item.path)
+  return activeNav?.id || 'dashboard'
+})
 
-const handleNavClick = (itemId: string, path: string) => {
-  sidebar.setActive(itemId)
+const handleNavClick = (path: string) => {
   navigateTo(path)
 }
 
@@ -28,19 +33,19 @@ const handleNavClick = (itemId: string, path: string) => {
 
 <template>
   <aside
-    class="h-screen flex flex-col border-r bg-white dark:bg-gray-900 transition-all duration-300"
+    class="h-screen flex flex-col border-r bg-background transition-all duration-300"
     :class="sidebar.isExpanded ? 'w-72' : 'w-20'"
   >
 
     <!-- Logo Section -->
-    <div class="p-4 border-b border-gray-200 dark:border-gray-800">
+    <div class="p-4 border-b border-border">
       <div class="flex items-center gap-3">
         <img
           :src="logoImage"
           alt="Outless Logo"
           class="w-12 h-12 flex-shrink-0"
         />
-        <span v-if="sidebar.isExpanded" class="font-bold text-lg text-gray-900 dark:text-white">
+        <span v-if="sidebar.isExpanded" class="font-bold text-lg text-foreground">
           Outless
         </span>
       </div>
@@ -52,23 +57,22 @@ const handleNavClick = (itemId: string, path: string) => {
         <div class="relative group">
           <!-- Main Nav Item -->
           <button
-            @click="handleNavClick(item.id, item.path)"
+            @click="handleNavClick(item.path)"
             class="w-full flex items-center justify-between p-3 rounded-lg transition-colors"
-            :class="sidebar.activeItem === item.id 
-              ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400' 
-              : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'"
+            :class="activeItem === item.id
+              ? 'bg-primary/10 text-primary dark:bg-primary/20'
+              : 'hover:bg-accent text-muted-foreground hover:text-foreground'"
           >
             <div class="flex items-center gap-3">
               <component :is="item.icon" class="w-5 h-5 flex-shrink-0" />
               <span v-if="sidebar.isExpanded" class="font-medium">{{ item.label }}</span>
             </div>
-            
+
           </button>
 
         </div>
       </template>
     </nav>
-
 
   </aside>
 </template>
