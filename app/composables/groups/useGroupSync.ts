@@ -36,6 +36,7 @@ export function useGroupSync(groupId: string) {
   const error = ref('')
   const syncTotal = ref(0)
   const syncProcessed = ref(0)
+  const syncAddedCount = ref(0)
   const probeUnavailableError = ref('')
   const probeUnavailableTotal = ref(0)
   const probeUnavailableProcessed = ref(0)
@@ -64,6 +65,14 @@ export function useGroupSync(groupId: string) {
 
   function handleWsMessage(msg: Record<string, unknown>) {
     const t = msg.type
+    if (t === 'sync_started') {
+      if (msg.group_id && msg.group_id !== groupId) return
+      isSyncing.value = true
+      if (typeof msg.total === 'number') syncTotal.value = msg.total
+      if (typeof msg.processed === 'number') syncProcessed.value = msg.processed
+      if (typeof msg.added_count === 'number') syncAddedCount.value = msg.added_count
+      return
+    }
     if (t === 'probe_unavailable_started') {
       if (msg.group_id && msg.group_id !== groupId) return
       isProbingUnavailable.value = true
@@ -154,6 +163,7 @@ export function useGroupSync(groupId: string) {
       syncingNodes.value = next
       if (typeof ev.total === 'number') syncTotal.value = ev.total
       if (typeof ev.processed === 'number') syncProcessed.value = ev.processed
+      if (typeof ev.added_total === 'number') syncAddedCount.value = ev.added_total
       return
     }
     if (t === 'sync_group_state') {
@@ -162,6 +172,7 @@ export function useGroupSync(groupId: string) {
       isSyncing.value = ev.running
       syncProcessed.value = ev.processed
       syncTotal.value = ev.total
+      if (typeof ev.added_count === 'number') syncAddedCount.value = ev.added_count
       if (ev.error) error.value = ev.error
       if (ev.synced_at) syncedAt.value = ev.synced_at
       if (typeof ev.deleted_unavailable_count === 'number') deletedUnavailableCount.value = ev.deleted_unavailable_count
@@ -188,6 +199,7 @@ export function useGroupSync(groupId: string) {
       deletedUnavailableCount.value = ev.deleted_unavailable_count ?? 0
       if (typeof ev.total === 'number') syncTotal.value = ev.total
       if (typeof ev.processed === 'number') syncProcessed.value = ev.processed
+      if (typeof ev.added_count === 'number') syncAddedCount.value = ev.added_count
       isSyncing.value = false
       maybeUnsubscribe()
       return
@@ -198,6 +210,7 @@ export function useGroupSync(groupId: string) {
       error.value = errMsg
       syncTotal.value = typeof msg.total === 'number' ? msg.total : syncTotal.value
       syncProcessed.value = typeof msg.processed === 'number' ? msg.processed : syncProcessed.value
+      syncAddedCount.value = typeof msg.added_count === 'number' ? msg.added_count : syncAddedCount.value
       isSyncing.value = false
       maybeUnsubscribe()
       return
@@ -206,6 +219,7 @@ export function useGroupSync(groupId: string) {
       if (msg.group_id && msg.group_id !== groupId) return
       syncTotal.value = typeof msg.total === 'number' ? msg.total : syncTotal.value
       syncProcessed.value = typeof msg.processed === 'number' ? msg.processed : syncProcessed.value
+      syncAddedCount.value = typeof msg.added_count === 'number' ? msg.added_count : syncAddedCount.value
       isCancelled.value = true
       isSyncing.value = false
       maybeUnsubscribe()
@@ -218,6 +232,7 @@ export function useGroupSync(groupId: string) {
     error.value = ''
     syncProcessed.value = 0
     syncTotal.value = 0
+    syncAddedCount.value = 0
     syncedAt.value = ''
     deletedUnavailableCount.value = 0
     syncingNodes.value = new Map()
@@ -273,6 +288,7 @@ export function useGroupSync(groupId: string) {
     error,
     syncTotal,
     syncProcessed,
+    syncAddedCount,
     probeUnavailableError,
     probeUnavailableTotal,
     probeUnavailableProcessed,

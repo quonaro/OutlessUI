@@ -8,7 +8,7 @@ import UiButton from '~/components/ui/button/button.vue'
 import UiCard from '~/components/ui/card/card.vue'
 import CardContent from '~/components/ui/card/CardContent.vue'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   group: Group
   visibleNodes: Node[]
   metrics: GroupStatusCounts
@@ -18,6 +18,7 @@ const props = defineProps<{
   syncProgressPercent: number
   syncProcessedCount: number
   syncTotalCount: number
+  syncAddedCount: number
   deletedUnavailableCount: number
   togglingAutoDelete: boolean
   cleanupPending: boolean
@@ -32,7 +33,7 @@ const props = defineProps<{
   localUnknown: boolean
   syncNodeError: (nodeId: string) => string
   probeNodeState: (nodeId: string) => ProbeUnavailableNodeStatus | null
-}>()
+}>(), {})
 
 const emit = defineEmits<{
   toggleLocalStatus: [status: NodeStatus, ev: Event]
@@ -129,17 +130,22 @@ async function copyNodeURL(node: Node) {
       :class="props.isSyncing ? 'justify-between' : 'justify-end'"
     >
       <div v-if="props.isSyncing" class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-        <span class="text-xs font-medium text-muted-foreground">Sync</span>
+        <span class="text-xs font-medium text-muted-foreground">Load</span>
         <span class="rounded-full border border-primary/40 bg-primary/10 px-2.5 py-0.5 font-mono text-xs tabular-nums text-primary">
           {{ props.syncProgressPercent }}% · {{ props.syncProcessedCount }}/{{ props.syncTotalCount }}
         </span>
+        <span class="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700">
+          +{{ props.syncAddedCount }} new
+        </span>
       </div>
       <div class="flex shrink-0 flex-wrap items-center justify-end gap-2">
-        <UiButton size="sm" variant="outline" :disabled="!props.canProbeUnavailable || props.isSyncing || props.probeUnavailablePending" @click.prevent="emit('probeUnavailable')">
-          {{ props.probeUnavailablePending ? `Probing... ${props.probeUnavailableProcessedCount}/${Math.max(props.probeUnavailableTotalCount, props.probeUnavailableProcessedCount)}` : 'Sync unavailable' }}
+        <UiButton v-if="Boolean(props.group.source_url?.trim())" size="sm" variant="outline" :disabled="props.probeUnavailablePending || props.isSyncing" @click.prevent="emit('startSync')">
+          {{ props.isSyncing ? 'Loading...' : 'Load' }}
         </UiButton>
-        <UiButton size="sm" variant="outline" :disabled="!props.group.source_url || props.isSyncing" @click.prevent="emit('startSync')">Sync</UiButton>
-        <UiButton size="sm" variant="outline" :disabled="!props.isSyncing && !props.probeUnavailablePending" @click.prevent="emit('cancelSync')">Cancel sync</UiButton>
+        <UiButton size="sm" variant="outline" :disabled="!props.canProbeUnavailable || props.isSyncing || props.probeUnavailablePending" @click.prevent="emit('probeUnavailable')">
+          {{ props.probeUnavailablePending ? `Checking... ${props.probeUnavailableProcessedCount}/${Math.max(props.probeUnavailableTotalCount, props.probeUnavailableProcessedCount)}` : 'Check all' }}
+        </UiButton>
+        <UiButton v-if="props.isSyncing || props.probeUnavailablePending" size="sm" variant="outline" @click.prevent="emit('cancelSync')">Cancel check</UiButton>
       </div>
     </div>
 
@@ -264,7 +270,7 @@ async function copyNodeURL(node: Node) {
                 :disabled="props.probingIds.has(node.id)"
                 @click="emit('retryNode', node)"
               >
-                {{ props.probingIds.has(node.id) ? 'Resyncing...' : 'Resync' }}
+                {{ props.probingIds.has(node.id) ? 'Rechecking...' : 'Recheck' }}
               </UiButton>
               <UiButton
                 v-if="isUnavailable(node.status)"

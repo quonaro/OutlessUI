@@ -64,6 +64,7 @@ export interface GroupSyncNodeEvent {
   latency_ms: number
   processed?: number
   total?: number
+  added_total?: number
   error?: string
 }
 
@@ -72,6 +73,7 @@ export interface GroupSyncDoneEvent {
   deleted_unavailable_count?: number
   processed?: number
   total?: number
+  added_count?: number
   group_id?: string
 }
 
@@ -84,6 +86,7 @@ export interface GroupSyncStateEvent {
   error?: string
   synced_at?: string
   deleted_unavailable_count?: number
+  added_count?: number
 }
 
 export interface GroupProbeUnavailableNodeEvent {

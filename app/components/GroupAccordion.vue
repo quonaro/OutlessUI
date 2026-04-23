@@ -87,6 +87,9 @@ function syncErrorText(groupId: string): string {
 function syncProcessedCount(groupId: string): number {
   return stateForGroup(groupId).syncProcessed.value
 }
+function syncAddedCount(groupId: string): number {
+  return stateForGroup(groupId).syncAddedCount.value
+}
 
 function syncTotalCount(group: Group): number {
   const total = stateForGroup(group.id).syncTotal.value
@@ -96,7 +99,10 @@ function syncTotalCount(group: Group): number {
 function syncProgressPercent(group: Group): number {
   const total = syncTotalCount(group)
   if (total <= 0) return 0
-  return Math.floor((syncProcessedCount(group.id) / total) * 100)
+  const processed = syncProcessedCount(group.id)
+  const pct = Math.floor((processed / total) * 100)
+  if (processed > 0 && pct === 0) return 1
+  return pct
 }
 
 function probeUnavailableIsRunning(groupId: string): boolean {
@@ -159,7 +165,7 @@ function probeUnavailable(group: Group) {
   stateForGroup(group.id).startProbeUnavailable()
 }
 function canProbeUnavailable(group: Group): boolean {
-  return (group.unhealthy_nodes ?? 0) + (group.unknown_nodes ?? 0) > 0
+  return (group.total_nodes ?? 0) > 0
 }
 function toggleAutoDelete(group: Group, checked: boolean) {
   const next = new Set(togglingAutoDeleteGroupIDs.value)
@@ -206,6 +212,7 @@ function nodeProbeState(groupID: string, nodeID: string) {
       :sync-progress-percent="syncProgressPercent(group)"
       :sync-processed-count="syncProcessedCount(group.id)"
       :sync-total-count="syncTotalCount(group)"
+      :sync-added-count="syncAddedCount(group.id)"
       :deleted-unavailable-count="deletedUnavailableCount(group.id)"
       :toggling-auto-delete="togglingAutoDeleteGroupIDs.has(group.id)"
       :cleanup-pending="cleanupGroupIDs.has(group.id)"
