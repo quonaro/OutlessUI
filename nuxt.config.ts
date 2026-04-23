@@ -1,4 +1,5 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+// @ts-ignore
 export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
 
@@ -7,7 +8,6 @@ export default defineNuxtConfig({
   future: {
     compatibilityVersion: 4,
   },
-
 
   app: {
     head: {
@@ -26,11 +26,6 @@ export default defineNuxtConfig({
     },
   },
 
-  components: {
-    dirs: [
-      '~/app/components',
-    ],
-  },
 
   modules: [
     '@nuxtjs/color-mode',
@@ -80,6 +75,19 @@ export default defineNuxtConfig({
   },
 
   vite: {
+    optimizeDeps: {
+      include: [
+        '@tanstack/vue-query',
+        'vee-validate',
+        '@vee-validate/zod',
+        'zod',
+        'lucide-vue-next',
+        'class-variance-authority',
+        'reka-ui',
+        'clsx',
+        'tailwind-merge',
+      ],
+    },
     resolve: {
       alias: {},
     },
@@ -94,7 +102,7 @@ export default defineNuxtConfig({
         '/api': {
           target: process.env.BACKEND_URL || 'http://localhost:41220',
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api/, ''),
+          rewrite: (path: string) => path.replace(/^\/api/, ''),
         },
       },
     },

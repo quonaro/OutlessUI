@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import UiGroupList from '~/components/ui/group-list/group-list.vue'
+
 definePageMeta({
   layout: 'default',
 })
