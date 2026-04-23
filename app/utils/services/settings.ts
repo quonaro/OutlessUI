@@ -1,8 +1,11 @@
 import { z } from 'zod'
 import { SettingsSchema, type Settings, type UpdateSettings } from '~/utils/schemas/settings'
+import { getAuthHeaders } from '~/utils/services/auth-header'
 
 export async function fetchSettings(baseURL: string): Promise<Settings> {
-  const data = await $fetch(`${baseURL}/v1/settings`)
+  const data = await $fetch(`${baseURL}/v1/settings`, {
+    headers: getAuthHeaders(),
+  })
   return SettingsSchema.parse(data)
 }
 
@@ -10,5 +13,6 @@ export async function updateSettings(settings: UpdateSettings, baseURL: string):
   await $fetch(`${baseURL}/v1/settings`, {
     method: 'PUT',
     body: settings,
+    headers: getAuthHeaders(),
   })
 }

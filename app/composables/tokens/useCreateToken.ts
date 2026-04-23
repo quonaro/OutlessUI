@@ -1,9 +1,9 @@
 import { useMutation, type UseMutationOptions } from '@tanstack/vue-query'
 import { createToken } from '~/utils/services/token'
-import type { Token, CreateToken } from '~/utils/schemas/token'
+import type { CreateToken, IssuedToken } from '~/utils/schemas/token'
 
 export function useCreateToken(
-  options?: UseMutationOptions<Token, Error, CreateToken>
+  options?: UseMutationOptions<IssuedToken, Error, CreateToken>,
 ) {
   const config = useRuntimeConfig()
   const backendUrl = config.public.apiBase as string

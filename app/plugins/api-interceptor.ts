@@ -11,9 +11,9 @@ export default defineNuxtPlugin(() => {
     onRequest({ options }) {
       // Add auth token if available
       const auth = useAuth()
-      if (auth.token) {
+      if (auth.token.value) {
         const headers = new Headers(options.headers as HeadersInit)
-        headers.set('Authorization', `Bearer ${auth.token}`)
+        headers.set('Authorization', `Bearer ${auth.token.value}`)
         options.headers = headers
       }
     },

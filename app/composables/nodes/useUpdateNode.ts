@@ -1,16 +1,20 @@
 import { useMutation, type UseMutationOptions } from '@tanstack/vue-query'
 import { updateNode } from '~/utils/services/node'
-import type { Node } from '~/utils/schemas/node'
+import type { UpdateNode } from '~/utils/schemas/node'
+
+export interface UpdateNodePayload extends UpdateNode {
+  id: string
+}
 
 export function useUpdateNode(
-  options?: UseMutationOptions<Node, Error, { id: string; url: string; groupId: string }>
+  options?: UseMutationOptions<void, Error, UpdateNodePayload>,
 ) {
   const config = useRuntimeConfig()
   const backendUrl = config.public.apiBase as string
 
   return useMutation({
-    mutationFn: ({ id, url, groupId }: { id: string; url: string; groupId: string }) =>
-      updateNode(id, url, groupId, backendUrl),
+    mutationFn: ({ id, ...rest }: UpdateNodePayload) =>
+      updateNode(id, rest, backendUrl),
     ...options,
   })
 }

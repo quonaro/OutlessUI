@@ -1,34 +1,37 @@
 import { z } from 'zod'
-import { NodeSchema, type Node } from '~/utils/schemas/node'
+import { NodeSchema, type CreateNode, type Node, type UpdateNode } from '~/utils/schemas/node'
+import { getAuthHeaders } from '~/utils/services/auth-header'
+
+interface ListNodesResponse {
+  nodes: unknown[]
+}
 
 export async function fetchNodes(baseURL: string): Promise<Node[]> {
-  const data = await $fetch(`${baseURL}/v1/nodes`)
-  return z.array(NodeSchema).parse(data)
+  const data = await $fetch<ListNodesResponse>(`${baseURL}/v1/nodes`, {
+    headers: getAuthHeaders(),
+  })
+  return z.array(NodeSchema).parse(data.nodes ?? [])
 }
 
-export async function fetchNode(id: string, baseURL: string): Promise<Node> {
-  const data = await $fetch(`${baseURL}/v1/nodes/${id}`)
-  return NodeSchema.parse(data)
-}
-
-export async function createNode(url: string, groupId: string, baseURL: string): Promise<Node> {
-  const data = await $fetch(`${baseURL}/v1/nodes`, {
+export async function createNode(node: CreateNode, baseURL: string): Promise<void> {
+  await $fetch(`${baseURL}/v1/nodes`, {
     method: 'POST',
-    body: { url, group_id: groupId },
+    body: node,
+    headers: getAuthHeaders(),
   })
-  return NodeSchema.parse(data)
 }
 
-export async function updateNode(id: string, url: string, groupId: string, baseURL: string): Promise<Node> {
-  const data = await $fetch(`${baseURL}/v1/nodes/${id}`, {
+export async function updateNode(id: string, node: UpdateNode, baseURL: string): Promise<void> {
+  await $fetch(`${baseURL}/v1/nodes/${id}`, {
     method: 'PUT',
-    body: { url, group_id: groupId },
+    body: node,
+    headers: getAuthHeaders(),
   })
-  return NodeSchema.parse(data)
 }
 
 export async function deleteNode(id: string, baseURL: string): Promise<void> {
   await $fetch(`${baseURL}/v1/nodes/${id}`, {
     method: 'DELETE',
+    headers: getAuthHeaders(),
   })
 }

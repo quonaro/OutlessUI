@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import {
   LayoutDashboard,
-  Server,
   Settings,
   Key,
   Globe,
   Layers,
   Users,
   RefreshCw,
-  LogOut
+  LogOut,
 } from 'lucide-vue-next'
 
 import { useSidebar } from '~/composables/useSidebar'

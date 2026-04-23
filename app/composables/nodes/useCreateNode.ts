@@ -1,16 +1,15 @@
 import { useMutation, type UseMutationOptions } from '@tanstack/vue-query'
 import { createNode } from '~/utils/services/node'
-import type { Node } from '~/utils/schemas/node'
+import type { CreateNode } from '~/utils/schemas/node'
 
 export function useCreateNode(
-  options?: UseMutationOptions<Node, Error, { url: string; groupId: string }>
+  options?: UseMutationOptions<void, Error, CreateNode>,
 ) {
   const config = useRuntimeConfig()
   const backendUrl = config.public.apiBase as string
 
   return useMutation({
-    mutationFn: ({ url, groupId }: { url: string; groupId: string }) =>
-      createNode(url, groupId, backendUrl),
+    mutationFn: (payload: CreateNode) => createNode(payload, backendUrl),
     ...options,
   })
 }
