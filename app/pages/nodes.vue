@@ -15,6 +15,7 @@ import { useGroups } from '~/composables/groups/useGroups'
 import type { Node } from '~/utils/schemas/node'
 import { createNode, deleteNode, probeNode } from '~/utils/services/node'
 import { createGroup } from '~/utils/services/group'
+import { countryBadgeLabel, normalizeCountryCode } from '~/utils/country'
 
 definePageMeta({ layout: 'default' })
 
@@ -46,6 +47,8 @@ const viewMode = ref<ViewMode>('grouped')
 const search = ref('')
 const statusFilter = ref<StatusFilter>('all')
 const pingFilter = ref<PingFilter>('all')
+/** Empty string means all countries. */
+const countryFilter = ref('')
 
 const showCreateGroupDialog = ref(false)
 const showCreateNodeDialog = ref(false)
@@ -111,8 +114,25 @@ const pingFilteredNodes = computed<Node[]>(() => {
   return list.filter((node) => matchesPingFilter(node.latency_ms, pingFilter.value))
 })
 
-const filteredFlatNodes = computed<Node[]>(() => {
+const countryOptions = computed(() => {
+  const set = new Set<string>()
+  for (const n of pingFilteredNodes.value) {
+    const c = normalizeCountryCode(n.country)
+    if (c.length === 2) set.add(c)
+  }
+  return [...set].sort()
+})
+
+const countryFilteredNodes = computed<Node[]>(() => {
   const list = pingFilteredNodes.value
+  const want = countryFilter.value.trim()
+  if (!want) return list
+  const target = normalizeCountryCode(want)
+  return list.filter((n) => normalizeCountryCode(n.country) === target)
+})
+
+const filteredFlatNodes = computed<Node[]>(() => {
+  const list = countryFilteredNodes.value
   const searchValue = search.value.trim().toLowerCase()
   return list.filter((node) => {
     if (statusFilter.value !== 'all' && node.status !== statusFilter.value) {
@@ -278,6 +298,10 @@ onBeforeUnmount(() => {
             <option value="ok">Ok (100-200 ms)</option>
             <option value="bad">Bad (&gt; 200 ms)</option>
           </select>
+          <select id="country-filter" v-model="countryFilter" name="country-filter" class="rounded-md border bg-background px-3 py-2 text-sm">
+            <option value="">All countries</option>
+            <option v-for="c in countryOptions" :key="c" :value="c">{{ countryBadgeLabel(c) }}</option>
+          </select>
         </div>
 
         <div v-if="nodesLoading || groupsLoading" class="py-8 text-center text-muted-foreground">
@@ -287,7 +311,7 @@ onBeforeUnmount(() => {
         <GroupAccordion
           v-else-if="viewMode === 'grouped'"
           :groups="groups ?? []"
-          :nodes="pingFilteredNodes"
+          :nodes="countryFilteredNodes"
           :search="search"
           :status-filter="statusFilter"
         />
@@ -308,6 +332,7 @@ onBeforeUnmount(() => {
                   <p class="text-xs text-muted-foreground">
                     {{ node.id }} · {{ groupNameByID[node.group_id] ?? (node.group_id || 'No group') }} ·
                     <span :class="latencyClass(node.latency_ms)">{{ node.latency_ms }} ms</span>
+                    <span class="ml-1 inline-flex items-center rounded-full border border-border/80 bg-muted/40 px-2 py-0.5 tabular-nums">{{ countryBadgeLabel(node.country) }}</span>
                   </p>
                   <p class="mt-1 text-xs">
                     <span

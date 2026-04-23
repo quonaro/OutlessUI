@@ -52,7 +52,13 @@ function dispatch(msg: WsPayload) {
     const keys = msg.keys
     if (Array.isArray(keys)) {
       for (const k of keys) {
-        if (typeof k === 'string') queryClient.invalidateQueries({ queryKey: [k] })
+        if (typeof k !== 'string') continue
+        // Infinite list keeps stale pages unless fully reset after bulk load / checks.
+        if (k === 'nodes') {
+          void queryClient.resetQueries({ queryKey: ['nodes', 'infinite'] })
+          continue
+        }
+        void queryClient.invalidateQueries({ queryKey: [k] })
       }
     }
     return

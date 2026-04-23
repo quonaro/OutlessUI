@@ -7,6 +7,7 @@ import type { ProbeUnavailableNodeStatus } from '~/composables/groups/useGroupSy
 import UiButton from '~/components/ui/button/button.vue'
 import UiCard from '~/components/ui/card/card.vue'
 import CardContent from '~/components/ui/card/CardContent.vue'
+import { countryBadgeLabel } from '~/utils/country'
 
 const props = withDefaults(defineProps<{
   group: Group
@@ -240,6 +241,11 @@ async function copyNodeURL(node: Node) {
                   :class="latencyBadgeClass(node.latency_ms)"
                 >
                   {{ node.latency_ms }} ms
+                </span>
+                <span
+                  class="ml-2 inline-flex items-center rounded-full border border-border/80 bg-muted/35 px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground"
+                >
+                  {{ countryBadgeLabel(props.probeNodeState(node.id)?.country ?? node.country) }}
                 </span>
                 <span v-if="props.syncNodeError(node.id)" class="ml-2 text-red-600">
                   {{ props.syncNodeError(node.id) }}

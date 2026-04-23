@@ -98,6 +98,7 @@ export interface GroupProbeUnavailableNodeEvent {
   processed?: number
   total?: number
   node_status?: 'healthy' | 'unhealthy' | 'unknown'
+  country?: string
   error?: string
 }
 
