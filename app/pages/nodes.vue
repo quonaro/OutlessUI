@@ -1,11 +1,17 @@
 <script setup lang="ts">
+import UiPageLayout from '~/components/ui/page-layout/page-layout.vue'
+import NodeList from '~/components/NodeList.vue'
+
 definePageMeta({
   layout: 'default',
 })
 </script>
 
 <template>
-  <div class="p-6">
+  <UiPageLayout
+    title="Nodes"
+    description="Manage your proxy nodes"
+  >
     <NodeList />
-  </div>
+  </UiPageLayout>
 </template>

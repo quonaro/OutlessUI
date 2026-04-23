@@ -1,11 +1,17 @@
 <script setup lang="ts">
+import UiPageLayout from '~/components/ui/page-layout/page-layout.vue'
+import TokenList from '~/components/TokenList.vue'
+
 definePageMeta({
   layout: 'default',
 })
 </script>
 
 <template>
-  <div class="p-6">
+  <UiPageLayout
+    title="Tokens"
+    description="Manage your access tokens"
+  >
     <TokenList />
-  </div>
+  </UiPageLayout>
 </template>

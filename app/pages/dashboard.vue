@@ -1,12 +1,18 @@
 <script setup lang="ts">
+import UiPageLayout from '~/components/ui/page-layout/page-layout.vue'
+
 definePageMeta({
   layout: 'default',
 })
 </script>
 
 <template>
-  <div class="p-6">
-    <h1 class="text-2xl font-bold mb-4">Dashboard</h1>
-    <p class="text-muted-foreground">Welcome to the dashboard</p>
-  </div>
+  <UiPageLayout
+    title="Dashboard"
+    description="Welcome to the dashboard"
+  >
+    <div class="text-muted-foreground">
+      <!-- Dashboard content will be here -->
+    </div>
+  </UiPageLayout>
 </template>

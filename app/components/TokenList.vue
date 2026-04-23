@@ -2,13 +2,7 @@
 </script>
 
 <template>
-  <div class="container mx-auto p-6">
-    <div class="flex items-center justify-between mb-6">
-      <h1 class="text-3xl font-bold">Tokens</h1>
-    </div>
-
-    <div class="text-center py-8 text-muted-foreground">
-      Token management is under construction
-    </div>
+  <div class="text-center py-8 text-muted-foreground">
+    Token management is under construction
   </div>
 </template>

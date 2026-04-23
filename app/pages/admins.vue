@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiPageLayout from '~/components/ui/page-layout/page-layout.vue'
 import UiAdminList from '~/components/ui/admin-list/admin-list.vue'
 
 definePageMeta({
@@ -7,7 +8,10 @@ definePageMeta({
 </script>
 
 <template>
-  <div class="p-6">
+  <UiPageLayout
+    title="Admins"
+    description="Manage admin users"
+  >
     <UiAdminList />
-  </div>
+  </UiPageLayout>
 </template>
