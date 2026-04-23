@@ -8,6 +8,7 @@ export default defineNuxtConfig({
     compatibilityVersion: 4,
   },
 
+
   app: {
     head: {
       title: 'Outless',
@@ -26,16 +27,14 @@ export default defineNuxtConfig({
     '@nuxt/eslint',
   ],
 
-  shadcn: {
-    prefix: '',
-    componentDir: './app/components/ui',
-  },
-
   css: ['./assets/css/main.css'],
 
   runtimeConfig: {
     public: {
-      apiBase: process.env.API_BASE_URL || 'http://localhost:41220/api/v1',
+      apiBase: process.env.API_BASE_URL || '/api/v1',
+    },
+    private: {
+      backendUrl: process.env.BACKEND_URL || 'http://localhost:41220',
     },
   },
 
@@ -47,11 +46,6 @@ export default defineNuxtConfig({
   typescript: {
     strict: true,
     typeCheck: true,
-    tsConfig: {
-      compilerOptions: {
-        types: ['node'],
-      },
-    },
   },
 
   postcss: {
@@ -62,6 +56,11 @@ export default defineNuxtConfig({
   },
 
   vite: {
+    resolve: {
+      alias: {
+        '~/features': './features',
+      },
+    },
     server: {
       allowedHosts: ['x.locrun.su'],
       headers: {
@@ -71,15 +70,10 @@ export default defineNuxtConfig({
       },
       proxy: {
         '/api': {
-          target: 'http://localhost:41220',
+          target: process.env.BACKEND_URL || 'http://localhost:41220',
           changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api/, ''),
         },
-      },
-    },
-    resolve: {
-      alias: {
-        '@': '<rootDir>',
-        '~': '<rootDir>',
       },
     },
   },
