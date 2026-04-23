@@ -4,7 +4,7 @@ import type { PublicSource } from '~/utils/schemas/public-source'
 
 export function usePublicSources(options?: UseQueryOptions<PublicSource[], Error>) {
   const config = useRuntimeConfig()
-  const backendUrl = config.private.backendUrl as string
+  const backendUrl = config.public.apiBase as string
 
   return useQuery({
     queryKey: ['public-sources'],

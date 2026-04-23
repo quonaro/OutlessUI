@@ -6,6 +6,7 @@ export default defineNuxtPlugin((nuxtApp) => {
     defaultOptions: {
       queries: {
         staleTime: 5 * 60 * 1000, // 5 minutes
+        refetchOnMount: false,
         refetchOnWindowFocus: false,
         retry: 1,
       },
@@ -15,7 +16,10 @@ export default defineNuxtPlugin((nuxtApp) => {
   nuxtApp.vueApp.use(VueQueryPlugin, { queryClient })
 
   if (import.meta.client) {
-    hydrate(queryClient, nuxtApp.payload.data.vueQueryState)
+    const state = nuxtApp.payload.data.vueQueryState
+    if (state) {
+      hydrate(queryClient, state)
+    }
   }
 
   if (import.meta.server) {

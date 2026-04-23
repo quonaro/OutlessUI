@@ -4,7 +4,7 @@ import type { Node } from '~/utils/schemas/node'
 
 export function useNodes(options?: UseQueryOptions<Node[], Error>) {
   const config = useRuntimeConfig()
-  const backendUrl = config.private.backendUrl as string
+  const backendUrl = config.public.apiBase as string
 
   return useQuery({
     queryKey: ['nodes'],

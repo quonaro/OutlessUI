@@ -6,7 +6,7 @@ export function useUpdateAdmin(
   options?: UseMutationOptions<Admin, Error, { id: string; admin: UpdateAdmin }>
 ) {
   const config = useRuntimeConfig()
-  const backendUrl = config.private.backendUrl as string
+  const backendUrl = config.public.apiBase as string
 
   return useMutation({
     mutationFn: ({ id, admin }: { id: string; admin: UpdateAdmin }) =>

@@ -5,7 +5,7 @@ export function useDeletePublicSource(
   options?: UseMutationOptions<void, Error, string>
 ) {
   const config = useRuntimeConfig()
-  const backendUrl = config.private.backendUrl as string
+  const backendUrl = config.public.apiBase as string
 
   return useMutation({
     mutationFn: (id: string) => deletePublicSource(id, backendUrl),

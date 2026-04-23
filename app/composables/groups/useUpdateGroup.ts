@@ -6,7 +6,7 @@ export function useUpdateGroup(
   options?: UseMutationOptions<Group, Error, { id: string; group: UpdateGroup }>
 ) {
   const config = useRuntimeConfig()
-  const backendUrl = config.private.backendUrl as string
+  const backendUrl = config.public.apiBase as string
 
   return useMutation({
     mutationFn: ({ id, group }: { id: string; group: UpdateGroup }) =>

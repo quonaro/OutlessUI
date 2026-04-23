@@ -2,20 +2,24 @@ import { z } from 'zod'
 
 export const AdminSchema = z.object({
   id: z.string(),
-  username: z.string().min(1),
-  created_at: z.string(),
+  username: z.string(),
 })
 
-export const CreateAdminSchema = z.object({
-  username: z.string().min(1),
-  password: z.string().min(8),
+export const UpdateAdminPasswordSchema = z.object({
+  password: z.string().min(8).max(128),
 })
 
-export const UpdateAdminSchema = z.object({
-  username: z.string().min(1).optional(),
-  password: z.string().min(8).optional(),
+export const ChangeAdminPasswordSchema = z.object({
+  current_login: z.string(),
+  current_password: z.string(),
+  new_login: z.string().optional(),
+  new_password: z.string().min(8).max(128),
+  confirm_password: z.string().min(8).max(128),
+}).refine((data) => data.new_password === data.confirm_password, {
+  message: "Passwords do not match",
+  path: ["confirm_password"],
 })
 
 export type Admin = z.infer<typeof AdminSchema>
-export type CreateAdmin = z.infer<typeof CreateAdminSchema>
-export type UpdateAdmin = z.infer<typeof UpdateAdminSchema>
+export type UpdateAdminPassword = z.infer<typeof UpdateAdminPasswordSchema>
+export type ChangeAdminPassword = z.infer<typeof ChangeAdminPasswordSchema>

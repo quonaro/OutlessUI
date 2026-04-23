@@ -6,7 +6,7 @@ export function useCreateGroup(
   options?: UseMutationOptions<Group, Error, CreateGroup>
 ) {
   const config = useRuntimeConfig()
-  const backendUrl = config.private.backendUrl as string
+  const backendUrl = config.public.apiBase as string
 
   return useMutation({
     mutationFn: (group: CreateGroup) => createGroup(group, backendUrl),

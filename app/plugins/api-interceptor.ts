@@ -5,7 +5,7 @@ export default defineNuxtPlugin(() => {
   const config = useRuntimeConfig()
   const { apiBase } = config.public
 
-  // Override global $fetch to use base URL from runtime config
+  // Dedicated API client with auth interceptor.
   const $api = $fetch.create({
     baseURL: apiBase,
     onRequest({ options }) {
@@ -27,7 +27,7 @@ export default defineNuxtPlugin(() => {
     },
   })
 
-  // Provide $api to all components
+  // Provide $api to components/composables that need it explicitly.
   return {
     provide: {
       api: $api,

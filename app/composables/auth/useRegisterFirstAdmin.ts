@@ -6,7 +6,7 @@ export function useRegisterFirstAdmin(
   options?: UseMutationOptions<AuthResponse, Error, LoginCredentials>
 ) {
   const config = useRuntimeConfig()
-  const backendUrl = config.private.backendUrl as string
+  const backendUrl = config.public.apiBase as string
 
   return useMutation({
     mutationFn: (credentials: LoginCredentials) =>

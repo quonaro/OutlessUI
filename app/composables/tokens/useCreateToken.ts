@@ -6,7 +6,7 @@ export function useCreateToken(
   options?: UseMutationOptions<Token, Error, CreateToken>
 ) {
   const config = useRuntimeConfig()
-  const backendUrl = config.private.backendUrl as string
+  const backendUrl = config.public.apiBase as string
 
   return useMutation({
     mutationFn: (token: CreateToken) => createToken(token, backendUrl),

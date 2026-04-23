@@ -6,7 +6,7 @@ export function useCreateAdmin(
   options?: UseMutationOptions<Admin, Error, CreateAdmin>
 ) {
   const config = useRuntimeConfig()
-  const backendUrl = config.private.backendUrl as string
+  const backendUrl = config.public.apiBase as string
 
   return useMutation({
     mutationFn: (admin: CreateAdmin) => createAdmin(admin, backendUrl),

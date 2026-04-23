@@ -6,7 +6,7 @@ export function useCreatePublicSource(
   options?: UseMutationOptions<PublicSource, Error, { url: string; groupId: string }>
 ) {
   const config = useRuntimeConfig()
-  const backendUrl = config.private.backendUrl as string
+  const backendUrl = config.public.apiBase as string
 
   return useMutation({
     mutationFn: ({ url, groupId }: { url: string; groupId: string }) =>

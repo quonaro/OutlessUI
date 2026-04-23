@@ -4,7 +4,7 @@ import type { Token } from '~/utils/schemas/token'
 
 export function useTokens(options?: UseQueryOptions<Token[], Error>) {
   const config = useRuntimeConfig()
-  const backendUrl = config.private.backendUrl as string
+  const backendUrl = config.public.apiBase as string
 
   return useQuery({
     queryKey: ['tokens'],

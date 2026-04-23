@@ -6,7 +6,7 @@ export function useFirstAdminStatus(
   options?: UseQueryOptions<FirstAdminStatus, Error>
 ) {
   const config = useRuntimeConfig()
-  const backendUrl = config.private.backendUrl as string
+  const backendUrl = config.public.apiBase as string
 
   return useQuery({
     queryKey: ['first-admin-status'],

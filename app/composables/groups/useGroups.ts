@@ -4,7 +4,7 @@ import type { Group } from '~/utils/schemas/group'
 
 export function useGroups(options?: UseQueryOptions<Group[], Error>) {
   const config = useRuntimeConfig()
-  const backendUrl = config.private.backendUrl as string
+  const backendUrl = config.public.apiBase as string
 
   return useQuery({
     queryKey: ['groups'],

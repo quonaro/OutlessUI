@@ -4,7 +4,7 @@ import type { Admin } from '~/utils/schemas/admin'
 
 export function useAdmins(options?: UseQueryOptions<Admin[], Error>) {
   const config = useRuntimeConfig()
-  const backendUrl = config.private.backendUrl as string
+  const backendUrl = config.public.apiBase as string
 
   return useQuery({
     queryKey: ['admins'],

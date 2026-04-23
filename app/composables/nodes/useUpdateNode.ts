@@ -6,7 +6,7 @@ export function useUpdateNode(
   options?: UseMutationOptions<Node, Error, { id: string; url: string; groupId: string }>
 ) {
   const config = useRuntimeConfig()
-  const backendUrl = config.private.backendUrl as string
+  const backendUrl = config.public.apiBase as string
 
   return useMutation({
     mutationFn: ({ id, url, groupId }: { id: string; url: string; groupId: string }) =>

@@ -22,9 +22,6 @@ export async function registerFirstAdmin(credentials: LoginCredentials, baseURL:
 }
 
 export async function getFirstAdminStatus(baseURL: string): Promise<FirstAdminStatus> {
-  const url = `${baseURL}/v1/auth/register_first_admin`
-  console.log('[auth.ts] Fetching URL:', url)
-  const data = await $fetch(url)
-  console.log('[auth.ts] Response data:', data)
+  const data = await $fetch(`${baseURL}/v1/auth/register_first_admin`)
   return FirstAdminStatusSchema.parse(data)
 }

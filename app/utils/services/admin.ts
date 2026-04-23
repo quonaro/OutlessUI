@@ -1,30 +1,27 @@
 import { z } from 'zod'
-import { AdminSchema, CreateAdminSchema, UpdateAdminSchema, type Admin, type CreateAdmin, type UpdateAdmin } from '~/utils/schemas/admin'
+import { AdminSchema, UpdateAdminPasswordSchema, ChangeAdminPasswordSchema, type Admin, type UpdateAdminPassword, type ChangeAdminPassword } from '~/utils/schemas/admin'
+
+interface ListAdminsResponse {
+  admins: unknown[]
+}
 
 export async function fetchAdmins(baseURL: string): Promise<Admin[]> {
-  const data = await $fetch(`${baseURL}/v1/admins`)
-  return z.array(AdminSchema).parse(data)
+  const data = await $fetch<ListAdminsResponse>(`${baseURL}/v1/admins`)
+  return z.array(AdminSchema).parse(data.admins)
 }
 
-export async function fetchAdmin(id: string, baseURL: string): Promise<Admin> {
-  const data = await $fetch(`${baseURL}/v1/admins/${id}`)
-  return AdminSchema.parse(data)
-}
-
-export async function createAdmin(admin: CreateAdmin, baseURL: string): Promise<Admin> {
-  const data = await $fetch(`${baseURL}/v1/admins`, {
-    method: 'POST',
-    body: admin,
-  })
-  return AdminSchema.parse(data)
-}
-
-export async function updateAdmin(id: string, admin: UpdateAdmin, baseURL: string): Promise<Admin> {
-  const data = await $fetch(`${baseURL}/v1/admins/${id}`, {
+export async function updateAdminPassword(id: string, password: UpdateAdminPassword, baseURL: string): Promise<void> {
+  await $fetch(`${baseURL}/v1/admins/${id}`, {
     method: 'PUT',
-    body: admin,
+    body: password,
   })
-  return AdminSchema.parse(data)
+}
+
+export async function changeAdminPassword(data: ChangeAdminPassword, baseURL: string): Promise<void> {
+  await $fetch(`${baseURL}/v1/admins/change-password`, {
+    method: 'POST',
+    body: data,
+  })
 }
 
 export async function deleteAdmin(id: string, baseURL: string): Promise<void> {
