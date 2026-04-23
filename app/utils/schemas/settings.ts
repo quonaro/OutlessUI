@@ -3,6 +3,11 @@ import { z } from 'zod'
 export const XrayConfigSchema = z.object({
   admin_url: z.string(),
   probe_url: z.string(),
+  socks_addr: z.string(),
+  geoip_db_path: z.string(),
+  geoip_db_url: z.string(),
+  geoip_auto: z.boolean(),
+  geoip_ttl: z.string(),
 })
 
 export const CheckerConfigSchema = z.object({

@@ -49,7 +49,7 @@ const deleteMutation = useMutation({
   },
 })
 const probeMutation = useMutation({
-  mutationFn: (id: string) => probeNode(id, baseURL),
+  mutationFn: ({ id, mode, probeURL }: { id: string, mode: 'normal' | 'fast', probeURL?: string }) => probeNode(id, baseURL, mode, probeURL),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['nodes'] })
     queryClient.invalidateQueries({ queryKey: ['groups'] })
@@ -112,11 +112,40 @@ function probeUnavailableIsRunning(groupId: string): boolean {
 }
 
 function probeUnavailableProcessedCount(groupId: string): number {
-  return stateForGroup(groupId).probeUnavailableProcessed.value
+  const state = stateForGroup(groupId)
+  const completed = state.probeUnavailableProcessed.value
+  let started = 0
+  for (const node of state.probingUnavailableNodes.value.values()) {
+    if (node.status !== 'queued') started++
+  }
+  // UX: show visible progress as soon as nodes move from queued -> probing.
+  return Math.max(completed, started)
 }
 
 function probeUnavailableTotalCount(groupId: string): number {
   return stateForGroup(groupId).probeUnavailableTotal.value
+}
+function probeUnavailableStatuses(groupId: string): Array<'healthy' | 'unhealthy' | 'unknown'> {
+  return stateForGroup(groupId).probeUnavailableStatuses.value
+}
+function probeUnavailableMode(groupId: string): 'normal' | 'fast' {
+  return stateForGroup(groupId).probeUnavailableMode.value
+}
+function probeUnavailableProbeURL(groupId: string): string {
+  return stateForGroup(groupId).probeUnavailableProbeURL.value
+}
+function probeNodeStates(groupId: string) {
+  return [...stateForGroup(groupId).probingUnavailableNodes.value.values()]
+}
+
+function syncInterrupted(group: Group): boolean {
+  const st = stateForGroup(group.id)
+  return !st.isSyncing.value && st.syncTotal.value > 0 && st.syncProcessed.value < st.syncTotal.value
+}
+
+function probeInterrupted(groupId: string): boolean {
+  const st = stateForGroup(groupId)
+  return !st.isProbingUnavailable.value && st.probeUnavailableTotal.value > 0 && st.probeUnavailableProcessed.value < st.probeUnavailableTotal.value
 }
 
 function startSync(group: Group) {
@@ -138,11 +167,12 @@ function removeNode(node: Node) {
     },
   })
 }
-function retryNode(node: Node) {
+function retryNode(payload: { node: Node, mode: 'normal' | 'fast', probeURL?: string }) {
+  const node = payload.node
   const next = new Set(probingNodeIDs.value)
   next.add(node.id)
   probingNodeIDs.value = next
-  probeMutation.mutate(node.id, {
+  probeMutation.mutate({ id: node.id, mode: payload.mode, probeURL: payload.probeURL }, {
     onSettled: () => {
       const current = new Set(probingNodeIDs.value)
       current.delete(node.id)
@@ -163,8 +193,8 @@ function deleteUnavailable(group: Group) {
     },
   })
 }
-function probeUnavailable(group: Group) {
-  stateForGroup(group.id).startProbeUnavailable()
+function probeUnavailable(group: Group, options: { statuses: Array<'healthy' | 'unhealthy' | 'unknown'>, mode: 'normal' | 'fast', probeURL?: string }) {
+  stateForGroup(group.id).startProbeUnavailable(options)
 }
 function canProbeUnavailable(group: Group): boolean {
   return (group.total_nodes ?? 0) > 0
@@ -217,6 +247,7 @@ function nodeProbeState(groupID: string, nodeID: string) {
       :sync-progress-percent="syncProgressPercent(group)"
       :sync-processed-count="syncProcessedCount(group.id)"
       :sync-total-count="syncTotalCount(group)"
+      :sync-interrupted="syncInterrupted(group)"
       :sync-added-count="syncAddedCount(group.id)"
       :deleted-unavailable-count="deletedUnavailableCount(group.id)"
       :toggling-auto-delete="togglingAutoDeleteGroupIDs.has(group.id)"
@@ -224,6 +255,11 @@ function nodeProbeState(groupID: string, nodeID: string) {
       :probe-unavailable-pending="probeUnavailableIsRunning(group.id)"
       :probe-unavailable-processed-count="probeUnavailableProcessedCount(group.id)"
       :probe-unavailable-total-count="probeUnavailableTotalCount(group.id)"
+      :probe-statuses="probeUnavailableStatuses(group.id)"
+      :probe-mode="probeUnavailableMode(group.id)"
+      :probe-url="probeUnavailableProbeURL(group.id)"
+      :probe-nodes="probeNodeStates(group.id)"
+      :probe-interrupted="probeInterrupted(group.id)"
       :can-probe-unavailable="canProbeUnavailable(group)"
       :deleting-ids="deletingNodeIDs"
       :probing-ids="probingNodeIDs"
@@ -238,7 +274,7 @@ function nodeProbeState(groupID: string, nodeID: string) {
       @start-sync="startSync(group)"
       @cancel-sync="cancelSync(group)"
       @delete-unavailable="deleteUnavailable(group)"
-      @probe-unavailable="probeUnavailable(group)"
+      @probe-unavailable="(options) => probeUnavailable(group, options)"
       @remove-node="removeNode"
       @retry-node="retryNode"
     />

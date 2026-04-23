@@ -32,6 +32,9 @@ export interface ProbeUnavailableNodeStatus {
   error?: string
 }
 
+const DEFAULT_PROBE_STATUSES: Array<'healthy' | 'unhealthy' | 'unknown'> = ['unknown', 'unhealthy', 'healthy']
+type ProbeMode = 'normal' | 'fast'
+
 export function useGroupSync(groupId: string) {
   const queryClient = useQueryClient()
 
@@ -50,6 +53,9 @@ export function useGroupSync(groupId: string) {
   const probeUnavailableError = ref('')
   const probeUnavailableTotal = ref(0)
   const probeUnavailableProcessed = ref(0)
+  const probeUnavailableStatuses = ref<Array<'healthy' | 'unhealthy' | 'unknown'>>([...DEFAULT_PROBE_STATUSES])
+  const probeUnavailableMode = ref<ProbeMode>('normal')
+  const probeUnavailableProbeURL = ref('')
   const syncedAt = ref('')
   const deletedUnavailableCount = ref(0)
   const isCancelled = ref(false)
@@ -89,6 +95,9 @@ export function useGroupSync(groupId: string) {
       probeUnavailableError.value = ''
       probeUnavailableTotal.value = typeof msg.total === 'number' ? msg.total : probeUnavailableTotal.value
       probeUnavailableProcessed.value = typeof msg.processed === 'number' ? msg.processed : 0
+      probeUnavailableStatuses.value = normalizeProbeStatuses(Array.isArray(msg.statuses) ? msg.statuses : probeUnavailableStatuses.value)
+      probeUnavailableMode.value = normalizeProbeMode(msg.mode)
+      probeUnavailableProbeURL.value = typeof msg.probe_url === 'string' ? msg.probe_url : ''
       probingUnavailableNodes.value = new Map()
       return
     }
@@ -98,6 +107,10 @@ export function useGroupSync(groupId: string) {
       isProbingUnavailable.value = ev.running
       probeUnavailableTotal.value = ev.total
       probeUnavailableProcessed.value = ev.processed
+      probeUnavailableError.value = ev.error ?? ''
+      probeUnavailableStatuses.value = normalizeProbeStatuses(ev.statuses ?? probeUnavailableStatuses.value)
+      probeUnavailableMode.value = normalizeProbeMode(ev.mode)
+      probeUnavailableProbeURL.value = typeof ev.probe_url === 'string' ? ev.probe_url : probeUnavailableProbeURL.value
       const next = new Map<string, ProbeUnavailableNodeStatus>()
       for (const node of ev.nodes ?? []) {
         next.set(node.node_id, {
@@ -259,14 +272,23 @@ export function useGroupSync(groupId: string) {
     sendAdminRealtime({ action: 'sync_group', group_id: groupId })
   }
 
-  function startProbeUnavailable() {
+  function startProbeUnavailable(options?: { statuses?: Array<'healthy' | 'unhealthy' | 'unknown'>, mode?: ProbeMode, probeURL?: string }) {
     isProbingUnavailable.value = true
     probeUnavailableError.value = ''
     probeUnavailableProcessed.value = 0
     probeUnavailableTotal.value = 0
     probingUnavailableNodes.value = new Map()
+    probeUnavailableStatuses.value = normalizeProbeStatuses(options?.statuses ?? probeUnavailableStatuses.value)
+    probeUnavailableMode.value = normalizeProbeMode(options?.mode)
+    probeUnavailableProbeURL.value = (options?.probeURL ?? '').trim()
     ensureSubscribed()
-    sendAdminRealtime({ action: 'probe_unavailable', group_id: groupId })
+    sendAdminRealtime({
+      action: 'probe_unavailable',
+      group_id: groupId,
+      statuses: probeUnavailableStatuses.value,
+      mode: probeUnavailableMode.value,
+      probe_url: probeUnavailableProbeURL.value,
+    })
   }
 
   function requestProbeUnavailableState() {
@@ -310,6 +332,9 @@ export function useGroupSync(groupId: string) {
     probeUnavailableError,
     probeUnavailableTotal,
     probeUnavailableProcessed,
+    probeUnavailableStatuses,
+    probeUnavailableMode,
+    probeUnavailableProbeURL,
     syncedAt,
     deletedUnavailableCount,
     syncingNodes,
@@ -322,4 +347,21 @@ export function useGroupSync(groupId: string) {
     stopSync,
     stopProbeUnavailable,
   }
+}
+
+function normalizeProbeStatuses(input: Array<'healthy' | 'unhealthy' | 'unknown'> | string[]): Array<'healthy' | 'unhealthy' | 'unknown'> {
+  const out: Array<'healthy' | 'unhealthy' | 'unknown'> = []
+  const seen = new Set<string>()
+  for (const raw of input) {
+    const item = String(raw).trim().toLowerCase()
+    if (item !== 'healthy' && item !== 'unhealthy' && item !== 'unknown') continue
+    if (seen.has(item)) continue
+    seen.add(item)
+    out.push(item)
+  }
+  return out.length > 0 ? out : [...DEFAULT_PROBE_STATUSES]
+}
+
+function normalizeProbeMode(mode: unknown): ProbeMode {
+  return String(mode).toLowerCase().trim() === 'fast' ? 'fast' : 'normal'
 }

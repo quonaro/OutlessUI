@@ -115,4 +115,8 @@ export interface GroupProbeUnavailableStateEvent {
   processed: number
   total: number
   nodes: GroupProbeUnavailableNodeEvent[]
+  error?: string
+  statuses?: string[]
+  mode?: 'normal' | 'fast'
+  probe_url?: string
 }

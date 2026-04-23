@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Group } from '~/utils/schemas/group'
 import type { Node, NodeStatus } from '~/utils/schemas/node'
 import type { GroupStatusCounts } from '~/composables/groups/useGroupAccordionFilters'
@@ -12,6 +12,7 @@ import { countryBadgeLabel, normalizeCountryCode } from '~/utils/country'
 
 type PingFilter = 'all' | 'good' | 'ok' | 'bad'
 type StatusFilter = 'all' | 'healthy' | 'unhealthy' | 'unknown'
+const defaultProbeStatuses: Array<'healthy' | 'unhealthy' | 'unknown'> = ['unknown', 'unhealthy', 'healthy']
 
 const props = withDefaults(defineProps<{
   group: Group
@@ -26,6 +27,7 @@ const props = withDefaults(defineProps<{
   syncProgressPercent: number
   syncProcessedCount: number
   syncTotalCount: number
+  syncInterrupted: boolean
   syncAddedCount: number
   deletedUnavailableCount: number
   togglingAutoDelete: boolean
@@ -33,6 +35,11 @@ const props = withDefaults(defineProps<{
   probeUnavailablePending: boolean
   probeUnavailableProcessedCount: number
   probeUnavailableTotalCount: number
+  probeStatuses: Array<'healthy' | 'unhealthy' | 'unknown'>
+  probeMode: 'normal' | 'fast'
+  probeUrl: string
+  probeNodes: ProbeUnavailableNodeStatus[]
+  probeInterrupted: boolean
   canProbeUnavailable: boolean
   deletingIds: Set<string>
   probingIds: Set<string>
@@ -49,13 +56,60 @@ const emit = defineEmits<{
   toggleAutoDelete: [checked: boolean]
   startSync: []
   cancelSync: []
-  probeUnavailable: []
+  probeUnavailable: [options: { statuses: Array<'healthy' | 'unhealthy' | 'unknown'>, mode: 'normal' | 'fast', probeURL?: string }]
   deleteUnavailable: []
   removeNode: [node: Node]
-  retryNode: [node: Node]
+  retryNode: [payload: { node: Node, mode: 'normal' | 'fast', probeURL?: string }]
 }>()
 
 const copiedNodeIDs = ref<Set<string>>(new Set())
+const probePanelOpen = ref(false)
+const probeFormOpen = ref(false)
+const probeStatusSelection = ref<Array<'healthy' | 'unhealthy' | 'unknown'>>([...defaultProbeStatuses])
+const probeModeSelection = ref<'normal' | 'fast'>('normal')
+const probeURLSelection = ref('')
+const nodeProbeFormOpen = ref(false)
+const nodeProbeTarget = ref<Node | null>(null)
+const nodeProbeModeSelection = ref<'normal' | 'fast'>('normal')
+const nodeProbeURLSelection = ref('')
+const accordionOpen = ref(false)
+
+const accordionStorageKey = computed(() => `outless:nodes:group-accordion:${props.group.id}`)
+const groupProbeFormStorageKey = computed(() => `outless:nodes:group-probe-form:${props.group.id}`)
+const singleNodeProbeFormStorageKey = computed(() => `outless:nodes:group-single-probe-form:${props.group.id}`)
+
+onMounted(() => {
+  if (!import.meta.client) return
+  const saved = localStorage.getItem(accordionStorageKey.value)
+  if (saved === '1') accordionOpen.value = true
+  if (saved === '0') accordionOpen.value = false
+
+  const groupProbeRaw = localStorage.getItem(groupProbeFormStorageKey.value)
+  if (groupProbeRaw) {
+    try {
+      const parsed = JSON.parse(groupProbeRaw) as { statuses?: unknown, mode?: unknown, probeURL?: unknown }
+      if (Array.isArray(parsed.statuses)) {
+        const normalized = normalizeProbeStatuses(parsed.statuses)
+        if (normalized.length > 0) probeStatusSelection.value = normalized
+      }
+      probeModeSelection.value = parsed.mode === 'fast' ? 'fast' : 'normal'
+      probeURLSelection.value = typeof parsed.probeURL === 'string' ? parsed.probeURL : ''
+    } catch {
+      // Ignore invalid localStorage payload and keep defaults.
+    }
+  }
+
+  const singleProbeRaw = localStorage.getItem(singleNodeProbeFormStorageKey.value)
+  if (singleProbeRaw) {
+    try {
+      const parsed = JSON.parse(singleProbeRaw) as { mode?: unknown, probeURL?: unknown }
+      nodeProbeModeSelection.value = parsed.mode === 'fast' ? 'fast' : 'normal'
+      nodeProbeURLSelection.value = typeof parsed.probeURL === 'string' ? parsed.probeURL : ''
+    } catch {
+      // Ignore invalid localStorage payload and keep defaults.
+    }
+  }
+})
 
 const {
   data: nodePages,
@@ -122,6 +176,30 @@ function maybeLoadMoreInList() {
   if (!hasNextPage.value || isFetchingNextPage.value) return
   void fetchNextPage()
 }
+
+watch(
+  () => props.probeStatuses,
+  (value) => {
+    probeStatusSelection.value = value.length > 0 ? [...value] : [...defaultProbeStatuses]
+  },
+  { immediate: true },
+)
+
+watch(
+  () => props.probeMode,
+  (value) => {
+    probeModeSelection.value = value ?? 'normal'
+  },
+  { immediate: true },
+)
+
+watch(
+  () => props.probeUrl,
+  (value) => {
+    probeURLSelection.value = value ?? ''
+  },
+  { immediate: true },
+)
 
 watch(
   [scrollRoot, loadSentinel, () => hasNextPage.value],
@@ -202,10 +280,94 @@ const emptyMessage = computed(() => {
   if (allNodesInGroup.value.length === 0) return 'No nodes in this group'
   return 'No nodes match the current filters'
 })
+
+const probeNodesSorted = computed(() => {
+  const rank = (s: ProbeUnavailableNodeStatus['status']) => {
+    if (s === 'probing') return 0
+    if (s === 'queued') return 1
+    if (s === 'ready') return 2
+    return 3
+  }
+  return [...props.probeNodes].sort((a, b) => rank(a.status) - rank(b.status))
+})
+
+function toggleProbeStatus(status: 'healthy' | 'unhealthy' | 'unknown') {
+  const set = new Set(probeStatusSelection.value)
+  if (set.has(status)) {
+    if (set.size <= 1) return
+    set.delete(status)
+  } else {
+    set.add(status)
+  }
+  probeStatusSelection.value = defaultProbeStatuses.filter((s) => set.has(s))
+}
+
+function handleProbeButtonClick() {
+  if (props.probeUnavailablePending) {
+    probePanelOpen.value = true
+    return
+  }
+  probeFormOpen.value = true
+}
+
+function confirmProbeStart() {
+  emit('probeUnavailable', {
+    statuses: probeStatusSelection.value,
+    mode: probeModeSelection.value,
+    probeURL: probeURLSelection.value.trim(),
+  })
+  probeFormOpen.value = false
+}
+
+function openNodeProbeForm(node: Node) {
+  nodeProbeTarget.value = node
+  nodeProbeFormOpen.value = true
+}
+
+function confirmNodeProbe() {
+  if (!nodeProbeTarget.value) return
+  emit('retryNode', {
+    node: nodeProbeTarget.value,
+    mode: nodeProbeModeSelection.value,
+    probeURL: nodeProbeURLSelection.value.trim(),
+  })
+  nodeProbeFormOpen.value = false
+}
+
+function onAccordionToggle(ev: Event) {
+  const target = ev.currentTarget as HTMLDetailsElement | null
+  if (!target) return
+  accordionOpen.value = target.open
+}
+
+watch(accordionOpen, (value) => {
+  if (!import.meta.client) return
+  localStorage.setItem(accordionStorageKey.value, value ? '1' : '0')
+})
+
+watch([probeStatusSelection, probeModeSelection, probeURLSelection], ([statuses, mode, probeURL]) => {
+  if (!import.meta.client) return
+  localStorage.setItem(groupProbeFormStorageKey.value, JSON.stringify({ statuses, mode, probeURL }))
+}, { deep: true })
+
+watch([nodeProbeModeSelection, nodeProbeURLSelection], ([mode, probeURL]) => {
+  if (!import.meta.client) return
+  localStorage.setItem(singleNodeProbeFormStorageKey.value, JSON.stringify({ mode, probeURL }))
+})
+
+function normalizeProbeStatuses(raw: unknown[]): Array<'healthy' | 'unhealthy' | 'unknown'> {
+  const allowed = new Set(['healthy', 'unhealthy', 'unknown'])
+  const values = raw
+    .map((v) => String(v).trim().toLowerCase())
+    .filter((v): v is 'healthy' | 'unhealthy' | 'unknown' => allowed.has(v))
+  const unique = new Set(values)
+  const normalized = defaultProbeStatuses.filter((s) => unique.has(s))
+  return normalized.length > 0 ? normalized : [...defaultProbeStatuses]
+}
 </script>
 
 <template>
-  <details class="rounded-md border bg-card">
+  <details class="rounded-md border bg-card" :open="accordionOpen" @toggle="onAccordionToggle">
     <summary class="cursor-pointer list-none bg-muted/25 px-4 py-3">
       <div class="min-w-0">
         <p class="truncate font-medium">
@@ -235,8 +397,8 @@ const emptyMessage = computed(() => {
       class="flex flex-wrap items-center gap-2 border-b border-border/80 bg-muted/40 px-4 py-2.5"
       :class="props.isSyncing ? 'justify-between' : 'justify-end'"
     >
-      <div v-if="props.isSyncing" class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-        <span class="text-xs font-medium text-muted-foreground">Load</span>
+      <div v-if="props.isSyncing || props.syncInterrupted" class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+        <span class="text-xs font-medium text-muted-foreground">{{ props.isSyncing ? 'Load' : 'Load interrupted' }}</span>
         <span class="rounded-full border border-primary/40 bg-primary/10 px-2.5 py-0.5 font-mono text-xs tabular-nums text-primary">
           {{ props.syncProgressPercent }}% · {{ props.syncProcessedCount }}/{{ props.syncTotalCount }}
         </span>
@@ -248,8 +410,19 @@ const emptyMessage = computed(() => {
         <UiButton v-if="Boolean(props.group.source_url?.trim())" size="sm" variant="outline" :disabled="props.probeUnavailablePending || props.isSyncing" @click.prevent="emit('startSync')">
           {{ props.isSyncing ? 'Loading...' : 'Load' }}
         </UiButton>
-        <UiButton size="sm" variant="outline" :disabled="!props.canProbeUnavailable || props.isSyncing || props.probeUnavailablePending" @click.prevent="emit('probeUnavailable')">
-          {{ props.probeUnavailablePending ? `Checking... ${props.probeUnavailableProcessedCount}/${Math.max(props.probeUnavailableTotalCount, props.probeUnavailableProcessedCount)}` : 'Check all' }}
+        <UiButton
+          size="sm"
+          variant="outline"
+          :disabled="(!props.canProbeUnavailable && !props.probeUnavailablePending) || props.isSyncing"
+          @click.prevent="handleProbeButtonClick"
+        >
+          {{
+            props.probeUnavailablePending
+              ? `Checking... ${props.probeUnavailableProcessedCount}/${Math.max(props.probeUnavailableTotalCount, props.probeUnavailableProcessedCount)}`
+              : props.probeInterrupted
+                ? `Interrupted ${props.probeUnavailableProcessedCount}/${Math.max(props.probeUnavailableTotalCount, props.probeUnavailableProcessedCount)}`
+                : 'Check all'
+          }}
         </UiButton>
         <UiButton v-if="props.isSyncing || props.probeUnavailablePending" size="sm" variant="outline" @click.prevent="emit('cancelSync')">Cancel check</UiButton>
       </div>
@@ -384,7 +557,7 @@ const emptyMessage = computed(() => {
                     size="sm"
                     class="whitespace-nowrap"
                     :disabled="props.probingIds.has(node.id)"
-                    @click="emit('retryNode', node)"
+                    @click="openNodeProbeForm(node)"
                   >
                     {{ props.probingIds.has(node.id) ? 'Rechecking...' : 'Recheck' }}
                   </UiButton>
@@ -394,7 +567,7 @@ const emptyMessage = computed(() => {
                     size="sm"
                     class="whitespace-nowrap"
                     :disabled="props.probingIds.has(node.id)"
-                    @click="emit('retryNode', node)"
+                    @click="openNodeProbeForm(node)"
                   >
                     {{ props.probingIds.has(node.id) ? 'Retrying...' : 'Retry' }}
                   </UiButton>
@@ -428,4 +601,121 @@ const emptyMessage = computed(() => {
       </div>
     </CardContent>
   </details>
+
+  <div v-if="probePanelOpen" class="fixed inset-0 z-40 flex justify-end bg-black/35" @click.self="probePanelOpen = false">
+    <aside class="h-full w-[min(92vw,30rem)] border-l bg-background p-4 shadow-xl">
+      <div class="mb-3 flex items-center justify-between">
+        <h3 class="text-sm font-semibold">Live checks · {{ props.group.name }}</h3>
+        <UiButton size="sm" variant="outline" @click="probePanelOpen = false">Close</UiButton>
+      </div>
+      <p class="mb-3 text-xs text-muted-foreground">
+        {{ props.probeUnavailableProcessedCount }}/{{ Math.max(props.probeUnavailableTotalCount, props.probeUnavailableProcessedCount) }}
+      </p>
+      <div class="max-h-[calc(100vh-7rem)] space-y-2 overflow-y-auto pr-1">
+        <div v-for="item in probeNodesSorted" :key="item.node_id" class="rounded-md border bg-muted/25 p-2 text-xs">
+          <div class="flex items-center justify-between gap-2">
+            <span class="truncate font-medium">{{ item.node_id }}</span>
+            <span class="rounded border px-1.5 py-0.5" :class="probeStateClass(item.status)">{{ probeStateLabel(item.status) }}</span>
+          </div>
+          <p class="truncate text-muted-foreground">{{ item.url }}</p>
+          <p class="mt-1 text-muted-foreground">
+            <span>latency: {{ item.latency_ms }} ms</span>
+            <span v-if="item.node_status"> · {{ item.node_status }}</span>
+            <span v-if="item.country"> · {{ countryBadgeLabel(item.country) }}</span>
+            <span v-if="item.error" class="text-red-600"> · {{ item.error }}</span>
+          </p>
+        </div>
+        <p v-if="probeNodesSorted.length === 0" class="py-6 text-center text-xs text-muted-foreground">No live checks yet</p>
+      </div>
+    </aside>
+  </div>
+
+  <div v-if="probeFormOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" @click.self="probeFormOpen = false">
+    <div class="w-full max-w-md rounded-lg border bg-background p-4 shadow-xl">
+      <h3 class="text-sm font-semibold">Check all settings</h3>
+      <p class="mt-1 text-xs text-muted-foreground">{{ props.group.name }}</p>
+
+      <div class="mt-4 space-y-2">
+        <p class="text-xs font-medium text-foreground">Mode</p>
+        <label class="flex items-center gap-2 text-xs">
+          <input v-model="probeModeSelection" type="radio" value="normal">
+          <span>Normal (with country detection)</span>
+        </label>
+        <label class="flex items-center gap-2 text-xs">
+          <input v-model="probeModeSelection" type="radio" value="fast">
+          <span>Fast (without country detection)</span>
+        </label>
+      </div>
+
+      <div class="mt-4 space-y-2">
+        <p class="text-xs font-medium text-foreground">Probe URL</p>
+        <input
+          v-model="probeURLSelection"
+          type="text"
+          placeholder="Leave empty to use server default"
+          class="w-full rounded-md border bg-background px-2 py-1 text-xs"
+        >
+      </div>
+
+      <div class="mt-4 space-y-2">
+        <p class="text-xs font-medium text-foreground">Statuses to check</p>
+        <label class="flex items-center gap-2 text-xs">
+          <input type="checkbox" :checked="probeStatusSelection.includes('unknown')" @change="toggleProbeStatus('unknown')">
+          <span>Unknown</span>
+        </label>
+        <label class="flex items-center gap-2 text-xs">
+          <input type="checkbox" :checked="probeStatusSelection.includes('unhealthy')" @change="toggleProbeStatus('unhealthy')">
+          <span>Unhealthy</span>
+        </label>
+        <label class="flex items-center gap-2 text-xs">
+          <input type="checkbox" :checked="probeStatusSelection.includes('healthy')" @change="toggleProbeStatus('healthy')">
+          <span>Healthy</span>
+        </label>
+      </div>
+
+      <div class="mt-5 flex items-center justify-end gap-2">
+        <UiButton size="sm" variant="outline" @click="probeFormOpen = false">Cancel</UiButton>
+        <UiButton size="sm" :disabled="probeStatusSelection.length === 0" @click="confirmProbeStart">Check!</UiButton>
+      </div>
+    </div>
+  </div>
+
+  <div v-if="nodeProbeFormOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" @click.self="nodeProbeFormOpen = false">
+    <div class="w-full max-w-md rounded-lg border bg-background p-4 shadow-xl">
+      <h3 class="text-sm font-semibold">Node check settings</h3>
+      <p class="mt-1 truncate text-xs text-muted-foreground">{{ nodeProbeTarget?.id }} · {{ nodeProbeTarget?.url }}</p>
+
+      <div class="mt-4 space-y-2">
+        <p class="text-xs font-medium text-foreground">Mode</p>
+        <label class="flex items-center gap-2 text-xs">
+          <input v-model="nodeProbeModeSelection" type="radio" value="normal">
+          <span>Normal (with country detection)</span>
+        </label>
+        <label class="flex items-center gap-2 text-xs">
+          <input v-model="nodeProbeModeSelection" type="radio" value="fast">
+          <span>Fast (without country detection)</span>
+        </label>
+      </div>
+
+      <div class="mt-4 space-y-2">
+        <p class="text-xs font-medium text-foreground">Probe URL</p>
+        <input
+          v-model="nodeProbeURLSelection"
+          type="text"
+          placeholder="Leave empty to use server default"
+          class="w-full rounded-md border bg-background px-2 py-1 text-xs"
+        >
+      </div>
+
+      <div class="mt-4 space-y-2">
+        <p class="text-xs font-medium text-foreground">Statuses to check</p>
+        <p class="text-xs text-muted-foreground">Single-node check targets current node status only.</p>
+      </div>
+
+      <div class="mt-5 flex items-center justify-end gap-2">
+        <UiButton size="sm" variant="outline" @click="nodeProbeFormOpen = false">Cancel</UiButton>
+        <UiButton size="sm" @click="confirmNodeProbe">Check!</UiButton>
+      </div>
+    </div>
+  </div>
 </template>

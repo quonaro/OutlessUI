@@ -43,7 +43,15 @@ const checkerForm = ref({
   latency_filter: '',
   public_refresh_interval: '',
   check_interval: '',
-  xray: { admin_url: '', probe_url: '' },
+  xray: {
+    admin_url: '',
+    probe_url: '',
+    socks_addr: '',
+    geoip_db_path: '',
+    geoip_db_url: '',
+    geoip_auto: false,
+    geoip_ttl: '',
+  },
 })
 
 // Backup for cancel functionality
@@ -58,7 +66,15 @@ const backupForms = ref({
     latency_filter: '',
     public_refresh_interval: '',
     check_interval: '',
-    xray: { admin_url: '', probe_url: '' },
+    xray: {
+      admin_url: '',
+      probe_url: '',
+      socks_addr: '',
+      geoip_db_path: '',
+      geoip_db_url: '',
+      geoip_auto: false,
+      geoip_ttl: '',
+    },
   },
 })
 
@@ -84,6 +100,11 @@ function loadSettingsData() {
       xray: {
         admin_url: settings.value.checker.xray.admin_url,
         probe_url: settings.value.checker.xray.probe_url,
+        socks_addr: settings.value.checker.xray.socks_addr,
+        geoip_db_path: settings.value.checker.xray.geoip_db_path,
+        geoip_db_url: settings.value.checker.xray.geoip_db_url,
+        geoip_auto: settings.value.checker.xray.geoip_auto,
+        geoip_ttl: settings.value.checker.xray.geoip_ttl,
       },
     }
     
@@ -141,6 +162,11 @@ async function saveSection(section: keyof typeof editingStates.value) {
     updateData.checker.check_interval = checkerForm.value.check_interval
     updateData.checker.xray.admin_url = checkerForm.value.xray.admin_url
     updateData.checker.xray.probe_url = checkerForm.value.xray.probe_url
+    updateData.checker.xray.socks_addr = checkerForm.value.xray.socks_addr
+    updateData.checker.xray.geoip_db_path = checkerForm.value.xray.geoip_db_path
+    updateData.checker.xray.geoip_db_url = checkerForm.value.xray.geoip_db_url
+    updateData.checker.xray.geoip_auto = checkerForm.value.xray.geoip_auto
+    updateData.checker.xray.geoip_ttl = checkerForm.value.xray.geoip_ttl
   }
   
   updateMutation.mutate(updateData)
@@ -333,6 +359,57 @@ watch(settings, () => {
               v-model="checkerForm.xray.probe_url"
               :disabled="!editingStates.checker"
               placeholder="https://www.google.com/generate_204"
+              :class="{ 'bg-muted': !editingStates.checker }"
+            />
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium">Xray SOCKS Address</label>
+            <UiInput
+              v-model="checkerForm.xray.socks_addr"
+              :disabled="!editingStates.checker"
+              placeholder="127.0.0.1:1080"
+              :class="{ 'bg-muted': !editingStates.checker }"
+            />
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium">GeoIP DB Path</label>
+            <UiInput
+              v-model="checkerForm.xray.geoip_db_path"
+              :disabled="!editingStates.checker"
+              placeholder="/app/GeoLite2-Country.mmdb"
+              :class="{ 'bg-muted': !editingStates.checker }"
+            />
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium">GeoIP DB URL</label>
+            <UiInput
+              v-model="checkerForm.xray.geoip_db_url"
+              :disabled="!editingStates.checker"
+              placeholder="https://example.com/GeoLite2-Country.mmdb"
+              :class="{ 'bg-muted': !editingStates.checker }"
+            />
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium">GeoIP Auto Update</label>
+            <div
+              class="flex items-center gap-2 rounded-md border px-3 py-2"
+              :class="{ 'bg-muted': !editingStates.checker }"
+            >
+              <input
+                v-model="checkerForm.xray.geoip_auto"
+                :disabled="!editingStates.checker"
+                type="checkbox"
+                class="h-4 w-4"
+              >
+              <span class="text-sm text-muted-foreground">Enable automatic GeoIP database updates</span>
+            </div>
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium">GeoIP TTL</label>
+            <UiInput
+              v-model="checkerForm.xray.geoip_ttl"
+              :disabled="!editingStates.checker"
+              placeholder="24h"
               :class="{ 'bg-muted': !editingStates.checker }"
             />
           </div>

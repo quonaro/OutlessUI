@@ -85,6 +85,11 @@ const isCreateGroupSubmitting = ref(false)
 const isCreateNodeSubmitting = ref(false)
 const deletingNodeIDs = ref<Set<string>>(new Set())
 const probingNodeIDs = ref<Set<string>>(new Set())
+const nodeProbeFormOpen = ref(false)
+const nodeProbeTarget = ref<Node | null>(null)
+const nodeProbeModeSelection = ref<'normal' | 'fast'>('normal')
+const nodeProbeURLSelection = ref('')
+const singleNodeProbeFormStorageKey = 'outless:nodes:single-probe-form'
 
 const createGroupMutation = useMutation({
   mutationFn: (payload: { name: string; source_url: string }) => createGroup(payload, baseURL),
@@ -164,7 +169,7 @@ function formatCountdown(totalMS: number): string {
 }
 
 const probeNodeMutation = useMutation({
-  mutationFn: (id: string) => probeNode(id, baseURL),
+  mutationFn: ({ id, mode, probeURL }: { id: string, mode: 'normal' | 'fast', probeURL?: string }) => probeNode(id, baseURL, mode, probeURL),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['nodes'] })
     queryClient.invalidateQueries({ queryKey: ['groups'] })
@@ -253,16 +258,24 @@ function removeNode(node: Node) {
 }
 
 function retryNode(node: Node) {
+  nodeProbeTarget.value = node
+  nodeProbeFormOpen.value = true
+}
+
+function confirmNodeProbeStart() {
+  const node = nodeProbeTarget.value
+  if (!node) return
   const next = new Set(probingNodeIDs.value)
   next.add(node.id)
   probingNodeIDs.value = next
-  probeNodeMutation.mutate(node.id, {
+  probeNodeMutation.mutate({ id: node.id, mode: nodeProbeModeSelection.value, probeURL: nodeProbeURLSelection.value.trim() }, {
     onSettled: () => {
       const current = new Set(probingNodeIDs.value)
       current.delete(node.id)
       probingNodeIDs.value = current
     },
   })
+  nodeProbeFormOpen.value = false
 }
 
 async function copyNodeURL(node: Node) {
@@ -311,6 +324,19 @@ function handlePublicRefreshStateMessage(msg: Record<string, unknown>) {
 }
 
 onMounted(() => {
+  if (import.meta.client) {
+    const raw = localStorage.getItem(singleNodeProbeFormStorageKey)
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as { mode?: unknown, probeURL?: unknown }
+        nodeProbeModeSelection.value = parsed.mode === 'fast' ? 'fast' : 'normal'
+        nodeProbeURLSelection.value = typeof parsed.probeURL === 'string' ? parsed.probeURL : ''
+      } catch {
+        // Ignore invalid localStorage payload and keep defaults.
+      }
+    }
+  }
+
   ensureAdminRealtimeConnected()
   stopRealtimeSubscription = subscribeAdminRealtime(handlePublicRefreshStateMessage)
   sendAdminRealtime({ action: 'public_refresh_state' })
@@ -354,6 +380,11 @@ onBeforeUnmount(() => {
     observer.disconnect()
     observer = null
   }
+})
+
+watch([nodeProbeModeSelection, nodeProbeURLSelection], ([mode, probeURL]) => {
+  if (!import.meta.client) return
+  localStorage.setItem(singleNodeProbeFormStorageKey, JSON.stringify({ mode, probeURL }))
 })
 </script>
 
@@ -555,6 +586,46 @@ onBeforeUnmount(() => {
             <UiButton :disabled="!nodeURLInput.trim() || isCreateNodeSubmitting" @click="submitCreateNode">
               {{ isCreateNodeSubmitting ? 'Creating...' : 'Create' }}
             </UiButton>
+          </CardFooter>
+        </UiCard>
+      </div>
+
+      <div v-if="nodeProbeFormOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" @click.self="nodeProbeFormOpen = false">
+        <UiCard class="w-full max-w-md p-6">
+          <CardHeader><CardTitle>Node check settings</CardTitle></CardHeader>
+          <CardContent class="space-y-4">
+            <p class="truncate text-xs text-muted-foreground">{{ nodeProbeTarget?.id }} · {{ nodeProbeTarget?.url }}</p>
+
+            <div class="space-y-2">
+              <p class="text-xs font-medium text-foreground">Mode</p>
+              <label class="flex items-center gap-2 text-xs">
+                <input v-model="nodeProbeModeSelection" type="radio" value="normal">
+                <span>Normal (with country detection)</span>
+              </label>
+              <label class="flex items-center gap-2 text-xs">
+                <input v-model="nodeProbeModeSelection" type="radio" value="fast">
+                <span>Fast (without country detection)</span>
+              </label>
+            </div>
+
+            <div class="space-y-2">
+              <p class="text-xs font-medium text-foreground">Probe URL</p>
+              <input
+                v-model="nodeProbeURLSelection"
+                type="text"
+                placeholder="Leave empty to use server default"
+                class="w-full rounded-md border bg-background px-2 py-1 text-xs"
+              >
+            </div>
+
+            <div class="space-y-1">
+              <p class="text-xs font-medium text-foreground">Statuses to check</p>
+              <p class="text-xs text-muted-foreground">Single-node check targets current node status only.</p>
+            </div>
+          </CardContent>
+          <CardFooter class="flex justify-end gap-2">
+            <UiButton variant="outline" @click="nodeProbeFormOpen = false">Cancel</UiButton>
+            <UiButton :disabled="!nodeProbeTarget" @click="confirmNodeProbeStart">Check!</UiButton>
           </CardFooter>
         </UiCard>
       </div>
