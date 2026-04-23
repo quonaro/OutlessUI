@@ -8,6 +8,7 @@
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
+    "start:output": "BACKEND_URL=${BACKEND_URL:-http://localhost:41220} NUXT_PUBLIC_API_BASE=${NUXT_PUBLIC_API_BASE:-/api} node .output/server/index.mjs",
     "postinstall": "nuxt prepare",
     "lint": "eslint .",
     "typecheck": "nuxt typecheck"
