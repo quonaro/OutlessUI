@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { useNodes } from "../../features/nodes/composables/useNodes"
+import { useNodes } from "~/features/nodes/composables/useNodes"
 import { ref } from "vue"
 import { Button } from "~/components/ui/button"
 import { Card } from "~/components/ui/card"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Trash2, Plus, Edit } from "lucide-vue-next"
-import type { CreateNode } from "../../features/nodes/schemas/node"
-import { CreateNodeSchema } from "../../features/nodes/schemas/node"
+import type { CreateNode } from "~/features/nodes/schemas/node"
+import { CreateNodeSchema } from "~/features/nodes/schemas/node"
 import { useForm } from "vee-validate"
 import { toTypedSchema } from "@vee-validate/zod"
 
@@ -74,17 +74,13 @@ const onSubmitEdit = handleSubmit(async (values: CreateNode) => {
               Group: {{ node.group_id }}
             </div>
             <div class="text-sm text-muted-foreground">
-              Latency: {{ node.latency_ms }}ms
-            </div>
-            <div class="text-sm" :class="{
-              'text-green-600': node.status === 'healthy',
-              'text-red-600': node.status === 'unhealthy',
-              'text-gray-600': node.status === 'unknown'
-            }">
               Status: {{ node.status }}
             </div>
             <div class="text-sm text-muted-foreground">
-              Country: {{ node.country || 'N/A' }}
+              Latency: {{ node.latency_ms }}ms
+            </div>
+            <div class="text-sm text-muted-foreground">
+              Country: {{ node.country }}
             </div>
           </div>
           <div class="flex gap-2">
@@ -104,14 +100,13 @@ const onSubmitEdit = handleSubmit(async (values: CreateNode) => {
       </Card>
     </div>
 
-    <!-- Create Dialog -->
     <div v-if="showCreateDialog" class="fixed inset-0 bg-black/50 flex items-center justify-center">
       <Card class="w-full max-w-md p-6">
         <h2 class="text-xl font-bold mb-4">Add Node</h2>
         <form @submit.prevent="onSubmitCreate" class="space-y-4">
           <div>
             <Label for="url">URL</Label>
-            <Input id="url" v-model="url" v-bind="urlAttrs" placeholder="vless://..." />
+            <Input id="url" v-model="url" v-bind="urlAttrs" placeholder="https://..." />
             <div v-if="createErrors.url" class="text-sm text-red-500 mt-1">
               {{ createErrors.url }}
             </div>
@@ -135,14 +130,13 @@ const onSubmitEdit = handleSubmit(async (values: CreateNode) => {
       </Card>
     </div>
 
-    <!-- Edit Dialog -->
     <div v-if="showEditDialog" class="fixed inset-0 bg-black/50 flex items-center justify-center">
       <Card class="w-full max-w-md p-6">
         <h2 class="text-xl font-bold mb-4">Edit Node</h2>
         <form @submit.prevent="onSubmitEdit" class="space-y-4">
           <div>
             <Label for="edit-url">URL</Label>
-            <Input id="edit-url" v-model="url" v-bind="urlAttrs" placeholder="vless://..." />
+            <Input id="edit-url" v-model="url" v-bind="urlAttrs" placeholder="https://..." />
             <div v-if="createErrors.url" class="text-sm text-red-500 mt-1">
               {{ createErrors.url }}
             </div>

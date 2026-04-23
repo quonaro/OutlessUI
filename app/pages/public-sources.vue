@@ -6,6 +6,6 @@ definePageMeta({
 
 <template>
   <div class="p-6">
-    <PublicSourceList />
+    <UiPublicSourceList />
   </div>
 </template>

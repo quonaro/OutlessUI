@@ -28,14 +28,7 @@ export default defineNuxtConfig({
 
   components: {
     dirs: [
-      {
-        path: '~/app/components',
-        pathPrefix: false,
-      },
-      {
-        path: '~/features',
-        pathPrefix: false,
-      },
+      '~/app/components',
     ],
   },
 
@@ -46,6 +39,11 @@ export default defineNuxtConfig({
     'shadcn-nuxt',
     '@nuxt/eslint',
   ],
+
+  shadcn: {
+    prefix: '',
+    componentDir: 'app/components/ui',
+  },
 
   colorMode: {
     preference: 'system',

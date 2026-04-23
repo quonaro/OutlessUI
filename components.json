@@ -10,8 +10,8 @@
     "prefix": ""
   },
   "aliases": {
-    "components": "@/components",
-    "utils": "@/lib/utils"
+    "components": "@/app/components",
+    "utils": "@/app/utils"
   },
   "iconLibrary": "lucide"
 }
