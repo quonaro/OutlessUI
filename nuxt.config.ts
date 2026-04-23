@@ -32,6 +32,10 @@ export default defineNuxtConfig({
         path: '~/app/components',
         pathPrefix: false,
       },
+      {
+        path: '~/features',
+        pathPrefix: false,
+      },
     ],
   },
 
@@ -68,7 +72,7 @@ export default defineNuxtConfig({
 
   typescript: {
     strict: true,
-    typeCheck: true,
+    typeCheck: process.env.NODE_ENV === 'production',
   },
 
   postcss: {

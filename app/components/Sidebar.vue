@@ -3,7 +3,11 @@ import {
   LayoutDashboard,
   Server,
   Settings,
-  Key
+  Key,
+  Globe,
+  Layers,
+  Users,
+  RefreshCw
 } from 'lucide-vue-next'
 
 import { useSidebarStore } from '../../stores/sidebar'
@@ -15,8 +19,11 @@ const route = useRoute()
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
-  { id: 'servers', label: 'Servers', icon: Server, path: '/servers' },
-  { id: 'api', label: 'API', icon: Key, path: '/api' },
+  { id: 'tokens', label: 'Tokens', icon: Key, path: '/tokens' },
+  { id: 'nodes', label: 'Nodes', icon: Globe, path: '/nodes' },
+  { id: 'groups', label: 'Groups', icon: Layers, path: '/groups' },
+  { id: 'public-sources', label: 'Public Sources', icon: RefreshCw, path: '/public-sources' },
+  { id: 'admins', label: 'Admins', icon: Users, path: '/admins' },
   { id: 'settings', label: 'Settings', icon: Settings, path: '/settings' },
 ]
 
