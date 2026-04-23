@@ -43,7 +43,8 @@ trigger: always_on
 ## Directory Structure
 
 ```
-app/                          # Nuxt 4: all frontend assets live here
+app/                          # Nuxt 4: all frontend code lives here (srcDir)
+  assets/                     # Static assets (CSS, images, fonts)
   components/
     ui/                       # Shadcn atomic components only. No business logic.
     [shared-component].vue    # Cross-feature shared components
@@ -52,6 +53,9 @@ app/                          # Nuxt 4: all frontend assets live here
   pages/                      # File-based routing (Nuxt auto-generates routes)
   middleware/                 # Route guards (auth, permissions)
   plugins/                    # Nuxt plugins (TanStack Query setup, etc.)
+  utils/                      # Utility functions (helpers, formatters)
+  app.vue                     # Root component
+  error.vue                   # Error page
 
 features/
   [feature-name]/
@@ -122,6 +126,7 @@ export async function fetchTask(id: number): Promise<Task> {
 - **FORBIDDEN:** `:deep()`, `!important`, inline `style=` attributes.
 - **FORBIDDEN:** SCSS/SASS files or imports.
 - **FORBIDDEN:** Custom CSS variables declared in components.
+- **ALLOWED:** Global CSS in `app/assets/` for Tailwind directives only (e.g., `@tailwind base;`).
 
 If a Shadcn component needs visual modification → edit it directly in `app/components/ui/`.
 

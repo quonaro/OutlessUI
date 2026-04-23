@@ -1,5 +1,5 @@
 /// <reference types="nuxt" />
-import { useAuthStore } from '~/stores/auth'
+import { useAuthStore } from '../../stores/auth'
 
 export default defineNuxtPlugin(() => {
   const config = useRuntimeConfig()
