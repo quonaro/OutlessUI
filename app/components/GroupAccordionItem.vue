@@ -211,9 +211,9 @@ async function copyNodeURL(node: Node) {
         :class="isUnavailable(node.status) ? 'border-red-400/60 bg-red-500/5' : ''"
       >
         <CardContent class="p-0">
-          <div class="flex items-center justify-between gap-2">
-            <div class="max-w-[52%] min-w-0">
-              <div class="group relative max-w-[52%] min-w-0">
+          <div class="flex items-center gap-2">
+            <div class="min-w-0 flex-1">
+              <div class="group relative min-w-0">
                 <p class="truncate text-sm font-medium">{{ node.url }}</p>
                 <div
                   class="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden max-h-48 w-[min(90vw,40rem)] overflow-y-auto whitespace-pre-wrap break-all rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md group-hover:block"
@@ -253,7 +253,7 @@ async function copyNodeURL(node: Node) {
                 </span>
               </p>
             </div>
-            <div class="flex shrink-0 flex-nowrap items-center justify-end gap-1">
+            <div class="flex shrink-0 flex-nowrap items-center justify-end gap-1 whitespace-nowrap">
               <UiButton
                 variant="outline"
                 size="sm"
