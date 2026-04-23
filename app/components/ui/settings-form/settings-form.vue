@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { ref } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import type { Settings, UpdateSettings } from '~/utils/schemas/settings'
 import { fetchSettings, updateSettings } from '~/utils/services/settings'
@@ -22,33 +22,10 @@ const config = useRuntimeConfig()
 const baseURL = config.public.apiBase as string
 const queryClient = useQueryClient()
 
-if (import.meta.dev) {
-  onMounted(() => {
-    console.debug('[trace][settings-form] mounted', {
-      route: useRoute().fullPath,
-      server: import.meta.server,
-      client: import.meta.client,
-    })
-    console.trace('[trace][settings-form] mounted stack')
-  })
-
-  onUnmounted(() => {
-    console.debug('[trace][settings-form] unmounted', {
-      route: useRoute().fullPath,
-    })
-    console.trace('[trace][settings-form] unmounted stack')
-  })
-}
-
 const { data: settings, isLoading } = useQuery({
   queryKey: ['settings'],
   queryFn: () => fetchSettings(baseURL),
   retry: false,
-  onError: (error) => {
-    if (import.meta.dev) {
-      console.error('[trace][settings] query error', error)
-    }
-  },
 })
 
 // Edit states for each section
