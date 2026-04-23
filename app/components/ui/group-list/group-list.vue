@@ -24,6 +24,7 @@ const showCreateDialog = ref(false)
 const showEditDialog = ref(false)
 const selectedGroup = ref<Group | null>(null)
 const groupName = ref('')
+const groupSourceURL = ref('')
 const isCreateSubmitting = ref(false)
 const isEditSubmitting = ref(false)
 
@@ -58,7 +59,7 @@ function handleCreateGroup() {
   if (!groupName.value.trim() || isCreateSubmitting.value) return
   isCreateSubmitting.value = true
   createMutation.mutate(
-    { name: groupName.value },
+    { name: groupName.value, source_url: groupSourceURL.value.trim() },
     {
       onSettled: () => {
         isCreateSubmitting.value = false
@@ -73,7 +74,7 @@ function handleEditGroup() {
   updateMutation.mutate(
     {
       id: selectedGroup.value.id,
-      data: { name: groupName.value },
+      data: { name: groupName.value, source_url: groupSourceURL.value.trim() },
     },
     {
       onSettled: () => {
@@ -93,6 +94,7 @@ function openEditDialog(group: Group) {
   isEditSubmitting.value = false
   selectedGroup.value = group
   groupName.value = group.name
+  groupSourceURL.value = group.source_url ?? ''
   showEditDialog.value = true
 }
 
@@ -100,12 +102,14 @@ function openCreateDialog() {
   createMutation.reset()
   isCreateSubmitting.value = false
   groupName.value = ''
+  groupSourceURL.value = ''
   showCreateDialog.value = true
 }
 
 function closeCreateDialog() {
   createMutation.reset()
   isCreateSubmitting.value = false
+  groupSourceURL.value = ''
   showCreateDialog.value = false
 }
 
@@ -115,6 +119,7 @@ function closeEditDialog() {
   showEditDialog.value = false
   selectedGroup.value = null
   groupName.value = ''
+  groupSourceURL.value = ''
 }
 </script>
 
@@ -143,6 +148,9 @@ function closeEditDialog() {
             </p>
             <p class="text-muted-foreground text-sm">
               Created: {{ new Date(group.created_at).toLocaleString() }}
+            </p>
+            <p class="text-muted-foreground text-sm">
+              Source: {{ group.source_url || 'Manual' }}
             </p>
           </div>
           <div class="flex gap-2">
@@ -181,6 +189,13 @@ function closeEditDialog() {
               @keyup.enter="handleCreateGroup"
             />
           </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium">Source URL (optional)</label>
+            <UiInput
+              v-model="groupSourceURL"
+              placeholder="https://example.com/subscription"
+            />
+          </div>
         </CardContent>
         <CardFooter class="flex justify-end gap-2">
           <UiButton variant="outline" @click="closeCreateDialog">
@@ -209,6 +224,13 @@ function closeEditDialog() {
               v-model="groupName"
               placeholder="Enter group name"
               @keyup.enter="handleEditGroup"
+            />
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium">Source URL (optional)</label>
+            <UiInput
+              v-model="groupSourceURL"
+              placeholder="https://example.com/subscription"
             />
           </div>
         </CardContent>

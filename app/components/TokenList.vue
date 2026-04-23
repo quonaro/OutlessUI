@@ -19,6 +19,7 @@ import CardFooter from '~/components/ui/card/CardFooter.vue'
 const config = useRuntimeConfig()
 const apiBase = (config.public.apiBase as string).replace(/\/+$/, '')
 const queryClient = useQueryClient()
+const defaultExpiresIn = EXPIRES_IN_OPTIONS[2]?.value ?? '720h'
 
 const { data: tokens, isLoading } = useTokens()
 const { data: groups } = useGroups()
@@ -35,7 +36,7 @@ const pendingRemoveId = ref('')
 
 const ownerInput = ref('')
 const groupIdsInput = ref<string[]>([])
-const expiresInInput = ref(EXPIRES_IN_OPTIONS[2].value)
+const expiresInInput = ref(defaultExpiresIn)
 
 const invalidate = () => queryClient.invalidateQueries({ queryKey: ['tokens'] })
 
@@ -73,7 +74,7 @@ const sortedTokens = computed<Token[]>(() => {
 function resetForm() {
   ownerInput.value = ''
   groupIdsInput.value = []
-  expiresInInput.value = EXPIRES_IN_OPTIONS[2].value
+  expiresInInput.value = defaultExpiresIn
   isIssueSubmitting.value = false
 }
 

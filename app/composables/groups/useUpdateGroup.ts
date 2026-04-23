@@ -1,9 +1,9 @@
 import { useMutation, type UseMutationOptions } from '@tanstack/vue-query'
 import { updateGroup } from '~/utils/services/group'
-import type { Group, UpdateGroup } from '~/utils/schemas/group'
+import type { UpdateGroup } from '~/utils/schemas/group'
 
 export function useUpdateGroup(
-  options?: UseMutationOptions<Group, Error, { id: string; group: UpdateGroup }>
+  options?: UseMutationOptions<void, Error, { id: string; group: UpdateGroup }>
 ) {
   const config = useRuntimeConfig()
   const backendUrl = config.public.apiBase as string

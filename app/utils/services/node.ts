@@ -36,3 +36,10 @@ export async function deleteNode(id: string, baseURL: string): Promise<void> {
     headers: getAuthHeaders(),
   })
 }
+
+export async function probeNode(id: string, baseURL: string): Promise<void> {
+  await $fetch(`${baseURL}/v1/nodes/${id}/probe`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  })
+}

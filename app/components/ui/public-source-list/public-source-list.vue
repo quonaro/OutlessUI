@@ -202,9 +202,7 @@ function resetEditForm() {
       </CardContent>
     </UiCard>
 
-    <!-- Create Source Dialog -->
-    <div v-if="showCreateDialog" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <UiCard class="w-full max-w-md p-6">
+    <UiCard v-if="showCreateDialog" class="mx-auto w-full max-w-md p-6">
         <CardHeader>
           <CardTitle>Add Public Source</CardTitle>
         </CardHeader>
@@ -241,12 +239,9 @@ function resetEditForm() {
             {{ isCreateSubmitting ? 'Adding...' : 'Add' }}
           </UiButton>
         </CardFooter>
-      </UiCard>
-    </div>
+    </UiCard>
 
-    <!-- Edit Source Dialog -->
-    <div v-if="showEditDialog" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <UiCard class="w-full max-w-md p-6">
+    <UiCard v-if="showEditDialog" class="mx-auto w-full max-w-md p-6">
         <CardHeader>
           <CardTitle>Edit Public Source</CardTitle>
         </CardHeader>
@@ -283,7 +278,6 @@ function resetEditForm() {
             {{ isEditSubmitting ? 'Updating...' : 'Update' }}
           </UiButton>
         </CardFooter>
-      </UiCard>
-    </div>
+    </UiCard>
   </div>
 </template>

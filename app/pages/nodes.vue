@@ -1,49 +1,250 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import UiPageLayout from '~/components/ui/page-layout/page-layout.vue'
-import NodeList from '~/components/NodeList.vue'
-import PublicSourceList from '~/components/ui/public-source-list/public-source-list.vue'
 import UiButton from '~/components/ui/button/button.vue'
-import Dialog from '~/components/ui/dialog/Dialog.vue'
-import DialogContent from '~/components/ui/dialog/DialogContent.vue'
-import DialogDescription from '~/components/ui/dialog/DialogDescription.vue'
-import DialogHeader from '~/components/ui/dialog/DialogHeader.vue'
-import DialogTitle from '~/components/ui/dialog/DialogTitle.vue'
+import UiInput from '~/components/ui/input/input.vue'
+import UiCard from '~/components/ui/card/card.vue'
+import CardHeader from '~/components/ui/card/CardHeader.vue'
+import CardTitle from '~/components/ui/card/CardTitle.vue'
+import CardContent from '~/components/ui/card/CardContent.vue'
+import CardFooter from '~/components/ui/card/CardFooter.vue'
+import GroupAccordion from '~/components/GroupAccordion.vue'
+import { useNodes } from '~/composables/nodes/useNodes'
+import { useGroups } from '~/composables/groups/useGroups'
+import type { Node } from '~/utils/schemas/node'
+import { createNode, deleteNode, probeNode } from '~/utils/services/node'
+import { createGroup } from '~/utils/services/group'
 
-definePageMeta({
-  layout: 'default',
+definePageMeta({ layout: 'default' })
+
+type ViewMode = 'grouped' | 'flat'
+type StatusFilter = 'all' | 'healthy' | 'unhealthy' | 'unknown'
+
+const queryClient = useQueryClient()
+const config = useRuntimeConfig()
+const baseURL = config.public.apiBase as string
+const { data: nodes, isLoading: nodesLoading } = useNodes()
+const { data: groups, isLoading: groupsLoading } = useGroups()
+
+const viewMode = ref<ViewMode>('grouped')
+const search = ref('')
+const statusFilter = ref<StatusFilter>('all')
+
+const showCreateGroupDialog = ref(false)
+const showCreateNodeDialog = ref(false)
+const groupNameInput = ref('')
+const groupSourceURLInput = ref('')
+const nodeURLInput = ref('')
+const nodeGroupIDInput = ref('')
+const isCreateGroupSubmitting = ref(false)
+const isCreateNodeSubmitting = ref(false)
+
+const createGroupMutation = useMutation({
+  mutationFn: (payload: { name: string; source_url: string }) => createGroup(payload, baseURL),
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['groups'] })
+    showCreateGroupDialog.value = false
+    groupNameInput.value = ''
+    groupSourceURLInput.value = ''
+  },
 })
 
-const isPublicSourcesDialogOpen = ref(false)
+const createNodeMutation = useMutation({
+  mutationFn: (payload: { url: string; group_id: string }) => createNode(payload, baseURL),
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['nodes'] })
+    showCreateNodeDialog.value = false
+    nodeURLInput.value = ''
+    nodeGroupIDInput.value = ''
+  },
+})
+
+const deleteNodeMutation = useMutation({
+  mutationFn: (id: string) => deleteNode(id, baseURL),
+  onSuccess: () => queryClient.invalidateQueries({ queryKey: ['nodes'] }),
+})
+
+const probeNodeMutation = useMutation({
+  mutationFn: (id: string) => probeNode(id, baseURL),
+  onSuccess: () => queryClient.invalidateQueries({ queryKey: ['nodes'] }),
+})
+
+const groupNameByID = computed<Record<string, string>>(() => {
+  const map: Record<string, string> = {}
+  for (const group of groups.value ?? []) {
+    map[group.id] = group.name
+  }
+  return map
+})
+
+const filteredFlatNodes = computed<Node[]>(() => {
+  const list = nodes.value ?? []
+  const searchValue = search.value.trim().toLowerCase()
+  return list.filter((node) => {
+    if (statusFilter.value !== 'all' && node.status !== statusFilter.value) {
+      return false
+    }
+    if (!searchValue) return true
+    const groupName = groupNameByID.value[node.group_id] ?? ''
+    const haystack = `${node.url} ${node.id} ${node.country} ${groupName}`.toLowerCase()
+    return haystack.includes(searchValue)
+  })
+})
+
+function submitCreateGroup() {
+  const name = groupNameInput.value.trim()
+  const sourceURL = groupSourceURLInput.value.trim()
+  if (!name || isCreateGroupSubmitting.value) return
+  isCreateGroupSubmitting.value = true
+  createGroupMutation.mutate(
+    { name, source_url: sourceURL },
+    { onSettled: () => { isCreateGroupSubmitting.value = false } },
+  )
+}
+
+function submitCreateNode() {
+  const url = nodeURLInput.value.trim()
+  if (!url || isCreateNodeSubmitting.value) return
+  isCreateNodeSubmitting.value = true
+  createNodeMutation.mutate(
+    { url, group_id: nodeGroupIDInput.value },
+    { onSettled: () => { isCreateNodeSubmitting.value = false } },
+  )
+}
+
+function removeNode(node: Node) {
+  if (!confirm(`Delete node ${node.id}?`)) return
+  deleteNodeMutation.mutate(node.id)
+}
+
+function retryNode(node: Node) {
+  probeNodeMutation.mutate(node.id)
+}
 </script>
 
 <template>
-  <UiPageLayout
-    title="Nodes"
-    description="Manage your proxy nodes"
-  >
-    <div class="flex justify-end mb-4">
-      <UiButton
-        variant="outline"
-        @click="isPublicSourcesDialogOpen = true"
-      >
-        Manage Public Sources
-      </UiButton>
-    </div>
-    <NodeList />
+  <UiPageLayout title="Nodes" description="Manage your proxy nodes">
+    <ClientOnly>
+      <template #fallback>
+        <div class="py-8 text-center text-muted-foreground">Loading nodes...</div>
+      </template>
 
-    <Dialog :open="isPublicSourcesDialogOpen" @update:open="isPublicSourcesDialogOpen = $event">
-      <DialogContent class="w-[95vw] sm:max-w-[1100px] h-[85vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Public Sources</DialogTitle>
-          <DialogDescription>
-            Manage public subscription sources without leaving the nodes page.
-          </DialogDescription>
-        </DialogHeader>
-        <div class="min-h-0 flex-1 overflow-y-auto pt-2 pr-1">
-          <PublicSourceList />
+      <div class="space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center gap-2">
+            <UiButton variant="outline" @click="viewMode = 'grouped'">Grouped</UiButton>
+            <UiButton variant="outline" @click="viewMode = 'flat'">Flat</UiButton>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <UiButton @click="showCreateGroupDialog = true">Create Group</UiButton>
+            <UiButton @click="showCreateNodeDialog = true">Create Node</UiButton>
+          </div>
         </div>
-      </DialogContent>
-    </Dialog>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <UiInput v-model="search" placeholder="Search by URL, ID, country, group..." class="max-w-md" />
+          <select v-model="statusFilter" class="rounded-md border bg-background px-3 py-2 text-sm">
+            <option value="all">All statuses</option>
+            <option value="healthy">Healthy</option>
+            <option value="unhealthy">Unhealthy</option>
+            <option value="unknown">Unknown</option>
+          </select>
+        </div>
+
+        <div v-if="nodesLoading || groupsLoading" class="py-8 text-center text-muted-foreground">
+          Loading data...
+        </div>
+
+        <GroupAccordion
+          v-else-if="viewMode === 'grouped'"
+          :groups="groups ?? []"
+          :nodes="nodes ?? []"
+          :search="search"
+          :status-filter="statusFilter"
+        />
+
+        <div v-else class="space-y-2">
+          <UiCard v-for="node in filteredFlatNodes" :key="node.id" class="px-3 py-2">
+            <CardContent class="p-0">
+              <div class="flex items-center justify-between gap-2">
+                <div class="min-w-0">
+                  <p class="truncate text-sm font-medium">{{ node.url }}</p>
+                  <p class="text-xs text-muted-foreground">
+                    {{ node.id }} · {{ groupNameByID[node.group_id] ?? (node.group_id || 'No group') }} · {{ node.status }} · {{ node.latency_ms }} ms
+                  </p>
+                </div>
+                <div class="flex gap-1">
+                  <UiButton
+                    v-if="node.status === 'unhealthy'"
+                    variant="outline"
+                    size="sm"
+                    :disabled="probeNodeMutation.isPending"
+                    @click="retryNode(node)"
+                  >
+                    Retry
+                  </UiButton>
+                  <UiButton
+                    variant="destructive"
+                    size="sm"
+                    :disabled="deleteNodeMutation.isPending"
+                    @click="removeNode(node)"
+                  >
+                    Delete
+                  </UiButton>
+                </div>
+              </div>
+            </CardContent>
+          </UiCard>
+        </div>
+      </div>
+
+      <div v-if="showCreateGroupDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <UiCard class="w-full max-w-md p-6">
+          <CardHeader><CardTitle>Create Group</CardTitle></CardHeader>
+          <CardContent class="space-y-4">
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Name</label>
+              <UiInput v-model="groupNameInput" placeholder="Group name" @keyup.enter="submitCreateGroup" />
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Source URL (optional)</label>
+              <UiInput v-model="groupSourceURLInput" placeholder="https://example.com/subscription" />
+            </div>
+          </CardContent>
+          <CardFooter class="flex justify-end gap-2">
+            <UiButton variant="outline" @click="showCreateGroupDialog = false">Cancel</UiButton>
+            <UiButton :disabled="!groupNameInput.trim() || isCreateGroupSubmitting" @click="submitCreateGroup">
+              {{ isCreateGroupSubmitting ? 'Creating...' : 'Create' }}
+            </UiButton>
+          </CardFooter>
+        </UiCard>
+      </div>
+
+      <div v-if="showCreateNodeDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <UiCard class="w-full max-w-md p-6">
+          <CardHeader><CardTitle>Create Node</CardTitle></CardHeader>
+          <CardContent class="space-y-4">
+            <div class="space-y-2">
+              <label class="text-sm font-medium">VLESS URL</label>
+              <UiInput v-model="nodeURLInput" placeholder="vless://uuid@host:443?..." @keyup.enter="submitCreateNode" />
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium">Group</label>
+              <select v-model="nodeGroupIDInput" class="w-full rounded-md border bg-background px-3 py-2 text-sm">
+                <option value="">No group</option>
+                <option v-for="group in groups ?? []" :key="group.id" :value="group.id">{{ group.name }}</option>
+              </select>
+            </div>
+          </CardContent>
+          <CardFooter class="flex justify-end gap-2">
+            <UiButton variant="outline" @click="showCreateNodeDialog = false">Cancel</UiButton>
+            <UiButton :disabled="!nodeURLInput.trim() || isCreateNodeSubmitting" @click="submitCreateNode">
+              {{ isCreateNodeSubmitting ? 'Creating...' : 'Create' }}
+            </UiButton>
+          </CardFooter>
+        </UiCard>
+      </div>
+    </ClientOnly>
   </UiPageLayout>
 </template>

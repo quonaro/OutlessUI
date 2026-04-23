@@ -4,7 +4,6 @@ import {
   Settings,
   Key,
   Globe,
-  Layers,
   LogOut,
 } from 'lucide-vue-next'
 
@@ -21,7 +20,6 @@ const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
   { id: 'tokens', label: 'Tokens', icon: Key, path: '/tokens' },
   { id: 'nodes', label: 'Nodes', icon: Globe, path: '/nodes' },
-  { id: 'groups', label: 'Groups', icon: Layers, path: '/groups' },
   { id: 'settings', label: 'Settings', icon: Settings, path: '/settings' },
 ]
 
