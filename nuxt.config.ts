@@ -1,9 +1,14 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 // @ts-ignore
+const backendUrl = process.env.BACKEND_URL
+if (!backendUrl) {
+  throw new Error('BACKEND_URL is required to start frontend')
+}
+
 export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
 
-  devtools: { enabled: true },
+  devtools: { enabled: process.env.NODE_ENV === 'production' ? false : process.env.NUXT_DEVTOOLS !== 'false' },
 
   future: {
     compatibilityVersion: 4,
@@ -50,16 +55,13 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     public: {
-      apiBase: process.env.API_BASE_URL || process.env.BACKEND_URL || '/api',
-    },
-    private: {
-      backendUrl: process.env.BACKEND_URL || 'http://localhost:41220',
+      apiBase: backendUrl,
     },
   },
 
   devServer: {
     port: 41221,
-    host: '0.0.0.0',
+    host: '127.0.0.1',
   },
 
   typescript: {
@@ -106,7 +108,7 @@ export default defineNuxtConfig({
       },
       proxy: {
         '/api': {
-          target: process.env.BACKEND_URL || 'http://localhost:41220',
+          target: backendUrl,
           changeOrigin: true,
           rewrite: (path: string) => path.replace(/^\/api/, ''),
         },
