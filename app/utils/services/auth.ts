@@ -1,30 +1,27 @@
-export interface LoginCredentials {
-  username: string
-  password: string
-}
+import { z } from 'zod'
+import { LoginCredentialsSchema, AuthResponseSchema, FirstAdminStatusSchema } from '~/utils/schemas/auth'
 
-export interface AuthResponse {
-  token: string
-}
-
-export interface FirstAdminStatus {
-  can_register: boolean
-}
+export type LoginCredentials = z.infer<typeof LoginCredentialsSchema>
+export type AuthResponse = z.infer<typeof AuthResponseSchema>
+export type FirstAdminStatus = z.infer<typeof FirstAdminStatusSchema>
 
 export async function login(credentials: LoginCredentials, baseURL: string): Promise<AuthResponse> {
-  return $fetch(`${baseURL}/auth/login`, {
+  const data = await $fetch(`${baseURL}/auth/login`, {
     method: 'POST',
     body: credentials,
   })
+  return AuthResponseSchema.parse(data)
 }
 
 export async function registerFirstAdmin(credentials: LoginCredentials, baseURL: string): Promise<AuthResponse> {
-  return $fetch(`${baseURL}/auth/register-first-admin`, {
+  const data = await $fetch(`${baseURL}/auth/register-first-admin`, {
     method: 'POST',
     body: credentials,
   })
+  return AuthResponseSchema.parse(data)
 }
 
 export async function getFirstAdminStatus(baseURL: string): Promise<FirstAdminStatus> {
-  return $fetch(`${baseURL}/auth/first-admin-status`)
+  const data = await $fetch(`${baseURL}/auth/first-admin-status`)
+  return FirstAdminStatusSchema.parse(data)
 }
