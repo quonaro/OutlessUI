@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import UiPageLayout from '~/components/ui/page-layout/page-layout.vue'
 import UiButton from '~/components/ui/button/button.vue'
@@ -20,6 +20,7 @@ definePageMeta({ layout: 'default' })
 
 type ViewMode = 'grouped' | 'flat'
 type StatusFilter = 'all' | 'healthy' | 'unhealthy' | 'unknown'
+type PingFilter = 'all' | 'good' | 'ok' | 'bad'
 
 const queryClient = useQueryClient()
 const config = useRuntimeConfig()
@@ -34,6 +35,7 @@ const {
 const { data: groups, isLoading: groupsLoading } = useGroups()
 const loadMoreAnchor = ref<HTMLElement | null>(null)
 let observer: IntersectionObserver | null = null
+let stopLoadMoreAnchorWatch: (() => void) | null = null
 
 const allNodes = computed<Node[]>(() =>
   nodePages.value?.pages.flatMap((page) => page.nodes) ?? []
@@ -43,6 +45,7 @@ const allNodes = computed<Node[]>(() =>
 const viewMode = ref<ViewMode>('grouped')
 const search = ref('')
 const statusFilter = ref<StatusFilter>('all')
+const pingFilter = ref<PingFilter>('all')
 
 const showCreateGroupDialog = ref(false)
 const showCreateNodeDialog = ref(false)
@@ -69,6 +72,7 @@ const createNodeMutation = useMutation({
   mutationFn: (payload: { url: string; group_id: string }) => createNode(payload, baseURL),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['nodes'] })
+    queryClient.invalidateQueries({ queryKey: ['groups'] })
     showCreateNodeDialog.value = false
     nodeURLInput.value = ''
     nodeGroupIDInput.value = ''
@@ -77,12 +81,20 @@ const createNodeMutation = useMutation({
 
 const deleteNodeMutation = useMutation({
   mutationFn: (id: string) => deleteNode(id, baseURL),
-  onSuccess: () => queryClient.invalidateQueries({ queryKey: ['nodes'] }),
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['nodes'] })
+    queryClient.invalidateQueries({ queryKey: ['groups'] })
+  },
 })
+
+const copiedNodeIDs = ref<Set<string>>(new Set())
 
 const probeNodeMutation = useMutation({
   mutationFn: (id: string) => probeNode(id, baseURL),
-  onSuccess: () => queryClient.invalidateQueries({ queryKey: ['nodes'] }),
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['nodes'] })
+    queryClient.invalidateQueries({ queryKey: ['groups'] })
+  },
 })
 
 const groupNameByID = computed<Record<string, string>>(() => {
@@ -93,8 +105,14 @@ const groupNameByID = computed<Record<string, string>>(() => {
   return map
 })
 
-const filteredFlatNodes = computed<Node[]>(() => {
+const pingFilteredNodes = computed<Node[]>(() => {
   const list = allNodes.value
+  if (pingFilter.value === 'all') return list
+  return list.filter((node) => matchesPingFilter(node.latency_ms, pingFilter.value))
+})
+
+const filteredFlatNodes = computed<Node[]>(() => {
+  const list = pingFilteredNodes.value
   const searchValue = search.value.trim().toLowerCase()
   return list.filter((node) => {
     if (statusFilter.value !== 'all' && node.status !== statusFilter.value) {
@@ -155,8 +173,33 @@ function retryNode(node: Node) {
   })
 }
 
+async function copyNodeURL(node: Node) {
+  await navigator.clipboard.writeText(node.url)
+  const next = new Set(copiedNodeIDs.value)
+  next.add(node.id)
+  copiedNodeIDs.value = next
+  setTimeout(() => {
+    const current = new Set(copiedNodeIDs.value)
+    current.delete(node.id)
+    copiedNodeIDs.value = current
+  }, 1200)
+}
+
 function isUnavailable(status: Node['status']): boolean {
   return status === 'unknown' || status === 'unhealthy'
+}
+
+function latencyClass(latencyMS: number): string {
+  if (latencyMS < 100) return 'text-emerald-600 dark:text-emerald-400'
+  if (latencyMS <= 200) return 'text-amber-600 dark:text-amber-400'
+  return 'text-red-600 dark:text-red-400'
+}
+
+function matchesPingFilter(latencyMS: number, filter: PingFilter): boolean {
+  if (filter === 'good') return latencyMS < 100
+  if (filter === 'ok') return latencyMS >= 100 && latencyMS <= 200
+  if (filter === 'bad') return latencyMS > 200
+  return true
 }
 
 function maybeLoadMore() {
@@ -173,12 +216,22 @@ onMounted(() => {
     }
   }, { rootMargin: '250px 0px 250px 0px' })
 
-  if (loadMoreAnchor.value) {
-    observer.observe(loadMoreAnchor.value)
-  }
+  stopLoadMoreAnchorWatch = watch(
+    loadMoreAnchor,
+    (el) => {
+      if (!observer) return
+      observer.disconnect()
+      if (el) {
+        observer.observe(el)
+      }
+    },
+    { flush: 'post', immediate: true },
+  )
 })
 
 onBeforeUnmount(() => {
+  stopLoadMoreAnchorWatch?.()
+  stopLoadMoreAnchorWatch = null
   if (observer) {
     observer.disconnect()
     observer = null
@@ -206,12 +259,24 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
-          <UiInput v-model="search" placeholder="Search by URL, ID, country, group..." class="max-w-md" />
-          <select v-model="statusFilter" class="rounded-md border bg-background px-3 py-2 text-sm">
+          <UiInput
+            id="node-search"
+            v-model="search"
+            name="node-search"
+            placeholder="Search by URL, ID, country, group..."
+            class="max-w-md"
+          />
+          <select id="status-filter" v-model="statusFilter" name="status-filter" class="rounded-md border bg-background px-3 py-2 text-sm">
             <option value="all">All statuses</option>
             <option value="healthy">Healthy</option>
             <option value="unhealthy">Unhealthy</option>
             <option value="unknown">Unknown</option>
+          </select>
+          <select id="ping-filter" v-model="pingFilter" name="ping-filter" class="rounded-md border bg-background px-3 py-2 text-sm">
+            <option value="all">All ping</option>
+            <option value="good">Good (&lt; 100 ms)</option>
+            <option value="ok">Ok (100-200 ms)</option>
+            <option value="bad">Bad (&gt; 200 ms)</option>
           </select>
         </div>
 
@@ -222,7 +287,7 @@ onBeforeUnmount(() => {
         <GroupAccordion
           v-else-if="viewMode === 'grouped'"
           :groups="groups ?? []"
-          :nodes="allNodes"
+          :nodes="pingFilteredNodes"
           :search="search"
           :status-filter="statusFilter"
         />
@@ -231,10 +296,18 @@ onBeforeUnmount(() => {
           <UiCard v-for="node in filteredFlatNodes" :key="node.id" class="px-3 py-2">
             <CardContent class="p-0">
               <div class="flex items-center justify-between gap-2">
-                <div class="min-w-0">
-                  <p class="truncate text-sm font-medium">{{ node.url }}</p>
+                <div class="max-w-[52%] min-w-0">
+                  <div class="group relative min-w-0">
+                    <p class="truncate text-sm font-medium">{{ node.url }}</p>
+                    <div
+                      class="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden max-h-48 w-[min(90vw,40rem)] overflow-y-auto whitespace-pre-wrap break-all rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md group-hover:block"
+                    >
+                      {{ node.url }}
+                    </div>
+                  </div>
                   <p class="text-xs text-muted-foreground">
-                    {{ node.id }} · {{ groupNameByID[node.group_id] ?? (node.group_id || 'No group') }} · {{ node.latency_ms }} ms
+                    {{ node.id }} · {{ groupNameByID[node.group_id] ?? (node.group_id || 'No group') }} ·
+                    <span :class="latencyClass(node.latency_ms)">{{ node.latency_ms }} ms</span>
                   </p>
                   <p class="mt-1 text-xs">
                     <span
@@ -249,11 +322,20 @@ onBeforeUnmount(() => {
                     </span>
                   </p>
                 </div>
-                <div class="flex gap-1">
+                <div class="flex shrink-0 flex-nowrap gap-1">
+                  <UiButton
+                    variant="outline"
+                    size="sm"
+                    class="whitespace-nowrap"
+                    @click="copyNodeURL(node)"
+                  >
+                    {{ copiedNodeIDs.has(node.id) ? 'Copied' : 'Copy' }}
+                  </UiButton>
                   <UiButton
                     v-if="isUnavailable(node.status)"
                     variant="outline"
                     size="sm"
+                    class="whitespace-nowrap"
                     :disabled="probingNodeIDs.has(node.id)"
                     @click="retryNode(node)"
                   >
@@ -262,6 +344,7 @@ onBeforeUnmount(() => {
                   <UiButton
                     variant="destructive"
                     size="sm"
+                    class="whitespace-nowrap"
                     :disabled="deletingNodeIDs.has(node.id)"
                     @click="removeNode(node)"
                   >
@@ -273,12 +356,8 @@ onBeforeUnmount(() => {
           </UiCard>
         </div>
 
-        <div
-          ref="loadMoreAnchor"
-          class="h-10 text-center text-xs text-muted-foreground"
-        >
+        <div ref="loadMoreAnchor" class="h-10 text-center text-xs text-muted-foreground">
           <span v-if="isFetchingNextPage">Loading more nodes...</span>
-          <span v-else-if="hasNextPage">Scroll down to load more</span>
         </div>
       </div>
 
@@ -287,12 +366,17 @@ onBeforeUnmount(() => {
           <CardHeader><CardTitle>Create Group</CardTitle></CardHeader>
           <CardContent class="space-y-4">
             <div class="space-y-2">
-              <label class="text-sm font-medium">Name</label>
-              <UiInput v-model="groupNameInput" placeholder="Group name" @keyup.enter="submitCreateGroup" />
+              <label class="text-sm font-medium" for="create-group-name">Name</label>
+              <UiInput id="create-group-name" v-model="groupNameInput" name="create-group-name" placeholder="Group name" @keyup.enter="submitCreateGroup" />
             </div>
             <div class="space-y-2">
-              <label class="text-sm font-medium">Source URL (optional)</label>
-              <UiInput v-model="groupSourceURLInput" placeholder="https://example.com/subscription" />
+              <label class="text-sm font-medium" for="create-group-source-url">Source URL (optional)</label>
+              <UiInput
+                id="create-group-source-url"
+                v-model="groupSourceURLInput"
+                name="create-group-source-url"
+                placeholder="https://example.com/subscription"
+              />
             </div>
           </CardContent>
           <CardFooter class="flex justify-end gap-2">
@@ -309,12 +393,17 @@ onBeforeUnmount(() => {
           <CardHeader><CardTitle>Create Node</CardTitle></CardHeader>
           <CardContent class="space-y-4">
             <div class="space-y-2">
-              <label class="text-sm font-medium">VLESS URL</label>
-              <UiInput v-model="nodeURLInput" placeholder="vless://uuid@host:443?..." @keyup.enter="submitCreateNode" />
+              <label class="text-sm font-medium" for="create-node-url">VLESS URL</label>
+              <UiInput id="create-node-url" v-model="nodeURLInput" name="create-node-url" placeholder="vless://uuid@host:443?..." @keyup.enter="submitCreateNode" />
             </div>
             <div class="space-y-2">
-              <label class="text-sm font-medium">Group</label>
-              <select v-model="nodeGroupIDInput" class="w-full rounded-md border bg-background px-3 py-2 text-sm">
+              <label class="text-sm font-medium" for="create-node-group-id">Group</label>
+              <select
+                id="create-node-group-id"
+                v-model="nodeGroupIDInput"
+                name="create-node-group-id"
+                class="w-full rounded-md border bg-background px-3 py-2 text-sm"
+              >
                 <option value="">No group</option>
                 <option v-for="group in groups ?? []" :key="group.id" :value="group.id">{{ group.name }}</option>
               </select>

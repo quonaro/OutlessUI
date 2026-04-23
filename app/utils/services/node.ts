@@ -14,6 +14,16 @@ export interface NodesPage {
   hasMore: boolean
 }
 
+function parseNextOffset(raw: unknown): number | null {
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    return raw
+  }
+  if (typeof raw === 'string' && raw.trim() !== '' && Number.isFinite(Number(raw))) {
+    return Number(raw)
+  }
+  return null
+}
+
 export async function fetchNodes(baseURL: string): Promise<Node[]> {
   const data = await $fetch<ListNodesResponse | unknown[]>(`${baseURL}/v1/nodes?limit=50&offset=0`, {
     headers: getAuthHeaders(),
@@ -32,10 +42,15 @@ export async function fetchNodesPage(baseURL: string, limit: number, offset: num
   if (Array.isArray(data)) {
     return { nodes, nextOffset: null, hasMore: false }
   }
+  const hasMore = Boolean(data.has_more)
+  let nextOffset = parseNextOffset(data.next_offset)
+  if (hasMore && nextOffset == null) {
+    nextOffset = offset + nodes.length
+  }
   return {
     nodes,
-    nextOffset: typeof data.next_offset === 'number' ? data.next_offset : null,
-    hasMore: Boolean(data.has_more),
+    nextOffset,
+    hasMore,
   }
 }
 

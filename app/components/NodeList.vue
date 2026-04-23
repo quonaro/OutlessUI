@@ -146,6 +146,12 @@ function statusBadgeClass(status: Node['status']): string {
       return 'bg-muted text-muted-foreground'
   }
 }
+
+function latencyClass(latencyMS: number): string {
+  if (latencyMS < 100) return 'text-emerald-600 dark:text-emerald-400'
+  if (latencyMS <= 200) return 'text-amber-600 dark:text-amber-400'
+  return 'text-red-600 dark:text-red-400'
+}
 </script>
 
 <template>
@@ -181,7 +187,7 @@ function statusBadgeClass(status: Node['status']): string {
     <UiCard v-for="node in visibleNodes" :key="node.id" class="p-4">
       <CardContent class="p-0">
         <div class="flex items-start justify-between gap-4">
-          <div class="min-w-0 flex-1 space-y-1">
+          <div class="max-w-[52%] min-w-0 space-y-1">
             <div class="flex flex-wrap items-center gap-2">
               <span
                 class="rounded-full px-2 py-0.5 text-xs font-medium uppercase"
@@ -192,7 +198,7 @@ function statusBadgeClass(status: Node['status']): string {
               <span class="text-sm font-medium">
                 {{ node.country || 'XX' }}
               </span>
-              <span class="text-xs text-muted-foreground">
+              <span class="text-xs" :class="latencyClass(node.latency_ms)">
                 {{ node.latency_ms }} ms
               </span>
             </div>
@@ -207,13 +213,14 @@ function statusBadgeClass(status: Node['status']): string {
               · ID: {{ node.id }}
             </p>
           </div>
-          <div class="flex gap-2">
-            <UiButton variant="outline" size="sm" @click="openEditDialog(node)">
+          <div class="flex shrink-0 flex-nowrap gap-2">
+            <UiButton variant="outline" size="sm" class="whitespace-nowrap" @click="openEditDialog(node)">
               Edit
             </UiButton>
             <UiButton
               variant="destructive"
               size="sm"
+              class="whitespace-nowrap"
               :disabled="deleteMutation.isPending"
               @click="handleDelete(node)"
             >

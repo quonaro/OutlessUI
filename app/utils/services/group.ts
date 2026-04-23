@@ -48,59 +48,67 @@ export async function deleteUnavailableGroupNodes(id: string, baseURL: string): 
   return typeof data.deleted === 'number' ? data.deleted : 0
 }
 
+export async function probeUnavailableGroupNodes(id: string, baseURL: string): Promise<number> {
+  const data = await $fetch<{ probed?: number }>(`${baseURL}/v1/groups/${id}/nodes/probe-unavailable`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  })
+  return typeof data.probed === 'number' ? data.probed : 0
+}
+
 export interface GroupSyncNodeEvent {
+  group_id?: string
   node_id: string
   url: string
   status: 'importing' | 'done' | 'unavailable' | 'error'
   latency_ms: number
+  processed?: number
+  total?: number
   error?: string
 }
 
 export interface GroupSyncDoneEvent {
   synced_at: string
   deleted_unavailable_count?: number
+  processed?: number
+  total?: number
+  group_id?: string
 }
 
-export function syncGroupStream(
-  groupId: string,
-  baseURL: string,
-  handlers: {
-    onNodeStatus?: (event: GroupSyncNodeEvent) => void
-    onDone?: (event: GroupSyncDoneEvent) => void
-    onError?: (message: string) => void
-  },
-): EventSource {
-  const token = useCookie<string | null>('auth_token').value
-  const streamURL = new URL(`${baseURL}/v1/groups/${groupId}/sync/stream`, window.location.origin)
-  if (token) {
-    streamURL.searchParams.set('access_token', token)
-  }
+export interface GroupSyncStateEvent {
+  group_id?: string
+  running: boolean
+  processed: number
+  total: number
+  nodes: GroupSyncNodeEvent[]
+  error?: string
+  synced_at?: string
+  deleted_unavailable_count?: number
+}
 
-  const source = new EventSource(streamURL.toString())
-  source.addEventListener('node_status', (event) => {
-    try {
-      const parsed = JSON.parse((event as MessageEvent).data) as GroupSyncNodeEvent
-      handlers.onNodeStatus?.(parsed)
-    } catch {
-      handlers.onError?.('invalid node_status payload')
-    }
-  })
-  source.addEventListener('done', (event) => {
-    try {
-      const parsed = JSON.parse((event as MessageEvent).data) as GroupSyncDoneEvent
-      handlers.onDone?.(parsed)
-    } catch {
-      handlers.onError?.('invalid done payload')
-    }
-  })
-  source.addEventListener('error', (event) => {
-    try {
-      const parsed = JSON.parse((event as MessageEvent).data) as { error?: string }
-      handlers.onError?.(parsed.error ?? 'sync stream failed')
-    } catch {
-      handlers.onError?.('sync stream failed')
-    }
-  })
+export interface GroupProbeUnavailableNodeEvent {
+  group_id?: string
+  node_id: string
+  url: string
+  status: 'queued' | 'probing' | 'ready' | 'error'
+  latency_ms: number
+  processed?: number
+  total?: number
+  node_status?: 'healthy' | 'unhealthy' | 'unknown'
+  error?: string
+}
 
-  return source
+export interface GroupProbeUnavailableDoneEvent {
+  group_id?: string
+  probed: number
+  processed?: number
+  total?: number
+}
+
+export interface GroupProbeUnavailableStateEvent {
+  group_id?: string
+  running: boolean
+  processed: number
+  total: number
+  nodes: GroupProbeUnavailableNodeEvent[]
 }
