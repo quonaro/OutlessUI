@@ -1,5 +1,7 @@
 <script setup lang="ts">
-// Example page - replace with actual implementation
+definePageMeta({
+  layout: 'default',
+})
 </script>
 
 <template>

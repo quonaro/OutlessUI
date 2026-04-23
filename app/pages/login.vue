@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/com
 import { Input } from '~/components/ui/input'
 import { Label } from '~/components/ui/label'
 import { useAuthStore } from '~/stores/auth'
-import { login } from '~~/features/auth/services/auth'
+import { getFirstAdminStatus, login, registerFirstAdmin } from '~~/features/auth/services/auth'
 
 definePageMeta({
   layout: false,
@@ -27,6 +27,8 @@ const [username] = defineField('username')
 const [password] = defineField('password')
 
 const authStore = useAuthStore()
+const isBootstrapMode = ref(false)
+const isInitialLoading = ref(true)
 const isLoading = ref(false)
 const errorMessage = ref('')
 
@@ -35,21 +37,37 @@ const onSubmit = handleSubmit(async (values) => {
   errorMessage.value = ''
 
   try {
-    const response = await login(values)
+    const response = isBootstrapMode.value
+      ? await registerFirstAdmin(values)
+      : await login(values)
     authStore.setToken(response.token)
     await navigateTo('/')
   }
   catch (error) {
-    errorMessage.value = 'Invalid username or password'
+    errorMessage.value = isBootstrapMode.value
+      ? 'Failed to create first admin'
+      : 'Invalid username or password'
   }
   finally {
     isLoading.value = false
   }
 })
 
-onMounted(() => {
+onMounted(async () => {
   if (authStore.isAuthenticated) {
     navigateTo('/')
+    return
+  }
+
+  try {
+    const status = await getFirstAdminStatus()
+    isBootstrapMode.value = status.can_register
+  }
+  catch (error) {
+    errorMessage.value = 'Failed to load auth state'
+  }
+  finally {
+    isInitialLoading.value = false
   }
 })
 </script>
@@ -59,13 +77,18 @@ onMounted(() => {
     <Card class="w-full max-w-md bg-zinc-900 border-zinc-800">
       <CardHeader class="space-y-1">
         <CardTitle class="text-2xl font-bold text-center text-white">
-          Admin Login
+          {{ isBootstrapMode ? 'Create First Admin' : 'Admin Login' }}
         </CardTitle>
         <CardDescription class="text-center text-zinc-400">
-          Enter your credentials to access the admin panel
+          {{ isBootstrapMode
+            ? 'No admins found. Create the first admin account to continue'
+            : 'Enter your credentials to access the admin panel' }}
         </CardDescription>
       </CardHeader>
       <CardContent>
+        <p v-if="isInitialLoading" class="text-sm text-zinc-400 text-center">
+          Loading...
+        </p>
         <form @submit="onSubmit" class="space-y-4">
           <div class="space-y-2">
             <Label for="username" class="text-zinc-300">Username</Label>
@@ -102,11 +125,11 @@ onMounted(() => {
           <Button
             type="submit"
             class="w-full bg-white text-black hover:bg-zinc-200"
-            :disabled="isLoading"
+            :disabled="isLoading || isInitialLoading"
           >
             <LogIn v-if="!isLoading" class="mr-2 h-4 w-4" />
-            <span v-if="isLoading">Signing in...</span>
-            <span v-else>Sign in</span>
+            <span v-if="isLoading">{{ isBootstrapMode ? 'Creating...' : 'Signing in...' }}</span>
+            <span v-else>{{ isBootstrapMode ? 'Create admin' : 'Sign in' }}</span>
           </Button>
         </form>
       </CardContent>

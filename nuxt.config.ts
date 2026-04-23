@@ -19,6 +19,15 @@ export default defineNuxtConfig({
     },
   },
 
+  components: {
+    dirs: [
+      {
+        path: '~/app/components',
+        pathPrefix: false,
+      },
+    ],
+  },
+
   modules: [
     '@nuxtjs/color-mode',
     '@pinia/nuxt',
@@ -59,6 +68,7 @@ export default defineNuxtConfig({
     resolve: {
       alias: {
         '~/features': './features',
+        '~/stores': './stores',
       },
     },
     server: {
