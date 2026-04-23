@@ -26,6 +26,8 @@ const selectedNode = ref<Node | null>(null)
 const nodeUrl = ref('')
 const nodeGroupId = ref('')
 const filterGroupId = ref<string>('')
+const isCreateSubmitting = ref(false)
+const isEditSubmitting = ref(false)
 
 const invalidate = () => queryClient.invalidateQueries({ queryKey: ['nodes'] })
 
@@ -52,6 +54,9 @@ const deleteMutation = useDeleteNode({
 const visibleNodes = computed<Node[]>(() => {
   const list = nodes.value ?? []
   if (!filterGroupId.value) return list
+  if (filterGroupId.value === '__ungrouped__') {
+    return list.filter((n) => !n.group_id)
+  }
   return list.filter((n) => n.group_id === filterGroupId.value)
 })
 
@@ -67,39 +72,63 @@ function resetForm() {
   nodeUrl.value = ''
   nodeGroupId.value = ''
   selectedNode.value = null
+  isCreateSubmitting.value = false
+  isEditSubmitting.value = false
 }
 
 function openCreateDialog() {
+  createMutation.reset()
   resetForm()
-  if (groups.value && groups.value.length > 0) {
-    nodeGroupId.value = groups.value[0].id
-  }
   showCreateDialog.value = true
 }
 
+function closeCreateDialog() {
+  createMutation.reset()
+  showCreateDialog.value = false
+  resetForm()
+}
+
 function openEditDialog(node: Node) {
+  updateMutation.reset()
+  isEditSubmitting.value = false
   selectedNode.value = node
   nodeUrl.value = node.url
   nodeGroupId.value = node.group_id
   showEditDialog.value = true
 }
 
+function closeEditDialog() {
+  updateMutation.reset()
+  showEditDialog.value = false
+  resetForm()
+}
+
 function handleCreate() {
-  if (!nodeUrl.value.trim() || !nodeGroupId.value) return
+  if (!nodeUrl.value.trim() || isCreateSubmitting.value) return
   const payload: CreateNode = {
     url: nodeUrl.value.trim(),
     group_id: nodeGroupId.value,
   }
-  createMutation.mutate(payload)
+  isCreateSubmitting.value = true
+  createMutation.mutate(payload, {
+    onSettled: () => {
+      isCreateSubmitting.value = false
+    },
+  })
 }
 
 function handleUpdate() {
-  if (!selectedNode.value || !nodeUrl.value.trim() || !nodeGroupId.value) return
+  if (!selectedNode.value || !nodeUrl.value.trim() || isEditSubmitting.value) return
   const payload: UpdateNode = {
     url: nodeUrl.value.trim(),
     group_id: nodeGroupId.value,
   }
-  updateMutation.mutate({ id: selectedNode.value.id, ...payload })
+  isEditSubmitting.value = true
+  updateMutation.mutate({ id: selectedNode.value.id, ...payload }, {
+    onSettled: () => {
+      isEditSubmitting.value = false
+    },
+  })
 }
 
 function handleDelete(node: Node) {
@@ -121,19 +150,19 @@ function statusBadgeClass(status: Node['status']): string {
 
 <template>
   <div class="space-y-4">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <h2 class="text-xl font-semibold">Nodes</h2>
+    <div class="flex flex-wrap items-center justify-end gap-3">
       <div class="flex items-center gap-2">
         <select
           v-model="filterGroupId"
           class="rounded-md border bg-background px-3 py-2 text-sm"
         >
           <option value="">All groups</option>
+          <option value="__ungrouped__">No group</option>
           <option v-for="g in groups ?? []" :key="g.id" :value="g.id">
             {{ g.name }}
           </option>
         </select>
-        <UiButton :disabled="!groups || groups.length === 0" @click="openCreateDialog">
+        <UiButton @click="openCreateDialog">
           Add Node
         </UiButton>
       </div>
@@ -173,7 +202,7 @@ function statusBadgeClass(status: Node['status']): string {
             <p class="text-xs text-muted-foreground">
               Group:
               <span class="font-medium">
-                {{ groupNameById[node.group_id] ?? node.group_id }}
+                {{ groupNameById[node.group_id] ?? (node.group_id || 'All groups') }}
               </span>
               · ID: {{ node.id }}
             </p>
@@ -218,6 +247,7 @@ function statusBadgeClass(status: Node['status']): string {
               v-model="nodeGroupId"
               class="w-full rounded-md border bg-background px-3 py-2 text-sm"
             >
+              <option value="">No group</option>
               <option v-for="g in groups ?? []" :key="g.id" :value="g.id">
                 {{ g.name }}
               </option>
@@ -225,14 +255,14 @@ function statusBadgeClass(status: Node['status']): string {
           </div>
         </CardContent>
         <CardFooter class="flex justify-end gap-2">
-          <UiButton variant="outline" @click="showCreateDialog = false">
+          <UiButton variant="outline" @click="closeCreateDialog">
             Cancel
           </UiButton>
           <UiButton
-            :disabled="!nodeUrl.trim() || !nodeGroupId || createMutation.isPending"
+            :disabled="!nodeUrl.trim() || isCreateSubmitting"
             @click="handleCreate"
           >
-            {{ createMutation.isPending ? 'Adding...' : 'Add' }}
+            {{ isCreateSubmitting ? 'Adding...' : 'Add' }}
           </UiButton>
         </CardFooter>
       </UiCard>
@@ -257,6 +287,7 @@ function statusBadgeClass(status: Node['status']): string {
               v-model="nodeGroupId"
               class="w-full rounded-md border bg-background px-3 py-2 text-sm"
             >
+              <option value="">No group</option>
               <option v-for="g in groups ?? []" :key="g.id" :value="g.id">
                 {{ g.name }}
               </option>
@@ -264,14 +295,14 @@ function statusBadgeClass(status: Node['status']): string {
           </div>
         </CardContent>
         <CardFooter class="flex justify-end gap-2">
-          <UiButton variant="outline" @click="showEditDialog = false">
+          <UiButton variant="outline" @click="closeEditDialog">
             Cancel
           </UiButton>
           <UiButton
-            :disabled="!nodeUrl.trim() || !nodeGroupId || updateMutation.isPending"
+            :disabled="!nodeUrl.trim() || isEditSubmitting"
             @click="handleUpdate"
           >
-            {{ updateMutation.isPending ? 'Saving...' : 'Save' }}
+            {{ isEditSubmitting ? 'Saving...' : 'Save' }}
           </UiButton>
         </CardFooter>
       </UiCard>

@@ -12,6 +12,13 @@ definePageMeta({
     title="Tokens"
     description="Manage your access tokens"
   >
-    <TokenList />
+    <ClientOnly>
+      <template #fallback>
+        <div class="py-8 text-center text-muted-foreground">
+          Loading tokens...
+        </div>
+      </template>
+      <TokenList />
+    </ClientOnly>
   </UiPageLayout>
 </template>

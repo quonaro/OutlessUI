@@ -1,5 +1,5 @@
 import { useMutation, type UseMutationOptions } from '@tanstack/vue-query'
-import { deleteToken } from '~/utils/services/token'
+import { deactivateToken } from '~/utils/services/token'
 
 export function useDeleteToken(
   options?: UseMutationOptions<void, Error, string>
@@ -8,7 +8,7 @@ export function useDeleteToken(
   const backendUrl = config.public.apiBase as string
 
   return useMutation({
-    mutationFn: (id: string) => deleteToken(id, backendUrl),
+    mutationFn: (id: string) => deactivateToken(id, backendUrl),
     ...options,
   })
 }

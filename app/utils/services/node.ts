@@ -7,10 +7,11 @@ interface ListNodesResponse {
 }
 
 export async function fetchNodes(baseURL: string): Promise<Node[]> {
-  const data = await $fetch<ListNodesResponse>(`${baseURL}/v1/nodes`, {
+  const data = await $fetch<ListNodesResponse | unknown[]>(`${baseURL}/v1/nodes`, {
     headers: getAuthHeaders(),
   })
-  return z.array(NodeSchema).parse(data.nodes ?? [])
+  const nodes = Array.isArray(data) ? data : (data.nodes ?? [])
+  return z.array(NodeSchema).parse(nodes)
 }
 
 export async function createNode(node: CreateNode, baseURL: string): Promise<void> {

@@ -27,7 +27,7 @@ const config = useRuntimeConfig()
 const baseURL = config.public.apiBase as string
 
 const formData = ref<ChangeAdminPassword>({
-  current_login: '',
+  current_login: props.currentLogin,
   current_password: '',
   new_login: '',
   new_password: '',
@@ -54,7 +54,7 @@ const mutation = useMutation({
 
 function resetForm() {
   formData.value = {
-    current_login: '',
+    current_login: props.currentLogin,
     current_password: '',
     new_login: '',
     new_password: '',
@@ -77,6 +77,9 @@ function handleSubmit() {
 }
 
 function handleOpenChange(value: boolean) {
+  if (value) {
+    formData.value.current_login = props.currentLogin
+  }
   if (!value) {
     resetForm()
   }

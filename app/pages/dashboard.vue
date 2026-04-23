@@ -31,22 +31,30 @@ const cards = computed<StatCard[]>(() => {
 
 <template>
   <UiPageLayout title="Dashboard" description="Overview of Outless state">
-    <div v-if="isLoading" class="py-8 text-center text-muted-foreground">
-      Loading stats...
-    </div>
-    <div v-else-if="isError" class="py-8 text-center text-destructive">
-      Failed to load stats: {{ error?.message }}
-    </div>
-    <div v-else class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      <UiCard v-for="card in cards" :key="card.label" class="p-4">
-        <CardContent class="p-0 space-y-2">
-          <p class="text-sm text-muted-foreground">{{ card.label }}</p>
-          <p class="text-3xl font-semibold">{{ card.value }}</p>
-          <p v-if="card.hint" class="text-xs text-muted-foreground">
-            {{ card.hint }}
-          </p>
-        </CardContent>
-      </UiCard>
-    </div>
+    <ClientOnly>
+      <template #fallback>
+        <div class="py-8 text-center text-muted-foreground">
+          Loading stats...
+        </div>
+      </template>
+
+      <div v-if="isLoading" class="py-8 text-center text-muted-foreground">
+        Loading stats...
+      </div>
+      <div v-else-if="isError" class="py-8 text-center text-destructive">
+        Failed to load stats: {{ error?.message }}
+      </div>
+      <div v-else class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <UiCard v-for="card in cards" :key="card.label" class="p-4">
+          <CardContent class="p-0 space-y-2">
+            <p class="text-sm text-muted-foreground">{{ card.label }}</p>
+            <p class="text-3xl font-semibold">{{ card.value }}</p>
+            <p v-if="card.hint" class="text-xs text-muted-foreground">
+              {{ card.hint }}
+            </p>
+          </CardContent>
+        </UiCard>
+      </div>
+    </ClientOnly>
   </UiPageLayout>
 </template>

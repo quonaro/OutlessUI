@@ -5,8 +5,6 @@ import {
   Key,
   Globe,
   Layers,
-  Users,
-  RefreshCw,
   LogOut,
 } from 'lucide-vue-next'
 
@@ -24,8 +22,6 @@ const navItems = [
   { id: 'tokens', label: 'Tokens', icon: Key, path: '/tokens' },
   { id: 'nodes', label: 'Nodes', icon: Globe, path: '/nodes' },
   { id: 'groups', label: 'Groups', icon: Layers, path: '/groups' },
-  { id: 'public-sources', label: 'Public Sources', icon: RefreshCw, path: '/public-sources' },
-  { id: 'admins', label: 'Admins', icon: Users, path: '/admins' },
   { id: 'settings', label: 'Settings', icon: Settings, path: '/settings' },
 ]
 

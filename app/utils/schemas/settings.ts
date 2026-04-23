@@ -5,16 +5,6 @@ export const XrayConfigSchema = z.object({
   probe_url: z.string(),
 })
 
-export const AdminConfigSchema = z.object({
-  login: z.string(),
-  password: z.string(),
-})
-
-export const JWTConfigSchema = z.object({
-  secret: z.string(),
-  expiry: z.string(),
-})
-
 export const CheckerConfigSchema = z.object({
   workers: z.number(),
   latency_filter: z.string(),
@@ -23,14 +13,29 @@ export const CheckerConfigSchema = z.object({
   xray: XrayConfigSchema,
 })
 
+export const HubConfigSchema = z.object({
+  Host: z.string(),
+  Port: z.number(),
+  SNI: z.string(),
+  PublicKey: z.string(),
+  PrivateKey: z.string().optional(),
+  ShortID: z.string(),
+  Fingerprint: z.string(),
+  ListenAddress: z.string(),
+  ConfigPath: z.string(),
+  XrayBinary: z.string(),
+  SyncInterval: z.union([z.string(), z.number()]),
+})
+
 export const DatabaseConfigSchema = z.object({
   url: z.string(),
 })
 
 export const APIConfigSchema = z.object({
   shutdown_timeout: z.string(),
-  jwt: JWTConfigSchema,
-  admin: AdminConfigSchema,
+  jwt_expiry: z.string(),
+  admin_login: z.string(),
+  hub: HubConfigSchema.optional(),
 })
 
 export const SettingsSchema = z.object({

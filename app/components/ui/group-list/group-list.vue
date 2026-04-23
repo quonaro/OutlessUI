@@ -24,6 +24,8 @@ const showCreateDialog = ref(false)
 const showEditDialog = ref(false)
 const selectedGroup = ref<Group | null>(null)
 const groupName = ref('')
+const isCreateSubmitting = ref(false)
+const isEditSubmitting = ref(false)
 
 const createMutation = useMutation({
   mutationFn: (data: CreateGroup) => createGroup(data, baseURL),
@@ -53,16 +55,32 @@ const deleteMutation = useMutation({
 })
 
 function handleCreateGroup() {
-  if (!groupName.value.trim()) return
-  createMutation.mutate({ name: groupName.value })
+  if (!groupName.value.trim() || isCreateSubmitting.value) return
+  isCreateSubmitting.value = true
+  createMutation.mutate(
+    { name: groupName.value },
+    {
+      onSettled: () => {
+        isCreateSubmitting.value = false
+      },
+    }
+  )
 }
 
 function handleEditGroup() {
-  if (!selectedGroup.value || !groupName.value.trim()) return
-  updateMutation.mutate({
-    id: selectedGroup.value.id,
-    data: { name: groupName.value },
-  })
+  if (!selectedGroup.value || !groupName.value.trim() || isEditSubmitting.value) return
+  isEditSubmitting.value = true
+  updateMutation.mutate(
+    {
+      id: selectedGroup.value.id,
+      data: { name: groupName.value },
+    },
+    {
+      onSettled: () => {
+        isEditSubmitting.value = false
+      },
+    }
+  )
 }
 
 function handleDeleteGroup(group: Group) {
@@ -71,21 +89,38 @@ function handleDeleteGroup(group: Group) {
 }
 
 function openEditDialog(group: Group) {
+  updateMutation.reset()
+  isEditSubmitting.value = false
   selectedGroup.value = group
   groupName.value = group.name
   showEditDialog.value = true
 }
 
 function openCreateDialog() {
+  createMutation.reset()
+  isCreateSubmitting.value = false
   groupName.value = ''
   showCreateDialog.value = true
+}
+
+function closeCreateDialog() {
+  createMutation.reset()
+  isCreateSubmitting.value = false
+  showCreateDialog.value = false
+}
+
+function closeEditDialog() {
+  updateMutation.reset()
+  isEditSubmitting.value = false
+  showEditDialog.value = false
+  selectedGroup.value = null
+  groupName.value = ''
 }
 </script>
 
 <template>
   <div class="space-y-4">
-    <div class="flex justify-between items-center">
-      <h2 class="text-xl font-semibold">Groups</h2>
+    <div class="flex justify-end items-center">
       <UiButton @click="openCreateDialog">
         Create Group
       </UiButton>
@@ -148,14 +183,14 @@ function openCreateDialog() {
           </div>
         </CardContent>
         <CardFooter class="flex justify-end gap-2">
-          <UiButton variant="outline" @click="showCreateDialog = false">
+          <UiButton variant="outline" @click="closeCreateDialog">
             Cancel
           </UiButton>
           <UiButton
-            :disabled="!groupName.trim() || createMutation.isPending"
+            :disabled="!groupName.trim() || isCreateSubmitting"
             @click="handleCreateGroup"
           >
-            {{ createMutation.isPending ? 'Creating...' : 'Create' }}
+            {{ isCreateSubmitting ? 'Creating...' : 'Create' }}
           </UiButton>
         </CardFooter>
       </UiCard>
@@ -178,14 +213,14 @@ function openCreateDialog() {
           </div>
         </CardContent>
         <CardFooter class="flex justify-end gap-2">
-          <UiButton variant="outline" @click="showEditDialog = false">
+          <UiButton variant="outline" @click="closeEditDialog">
             Cancel
           </UiButton>
           <UiButton
-            :disabled="!groupName.trim() || updateMutation.isPending"
+            :disabled="!groupName.trim() || isEditSubmitting"
             @click="handleEditGroup"
           >
-            {{ updateMutation.isPending ? 'Updating...' : 'Update' }}
+            {{ isEditSubmitting ? 'Updating...' : 'Update' }}
           </UiButton>
         </CardFooter>
       </UiCard>

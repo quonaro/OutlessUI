@@ -7,10 +7,11 @@ interface ListPublicSourcesResponse {
 }
 
 export async function fetchPublicSources(baseURL: string): Promise<PublicSource[]> {
-  const data = await $fetch<ListPublicSourcesResponse>(`${baseURL}/v1/public-sources`, {
+  const data = await $fetch<ListPublicSourcesResponse | unknown[]>(`${baseURL}/v1/public-sources`, {
     headers: getAuthHeaders(),
   })
-  return z.array(PublicSourceSchema).parse(data.public_sources)
+  const sources = Array.isArray(data) ? data : data.public_sources
+  return z.array(PublicSourceSchema).parse(sources)
 }
 
 export async function createPublicSource(source: CreatePublicSource, baseURL: string): Promise<PublicSource> {

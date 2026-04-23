@@ -4,7 +4,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import type { PublicSource, CreatePublicSource, UpdatePublicSource } from '~/utils/schemas/public-source'
 import { fetchPublicSources, createPublicSource, updatePublicSource, deletePublicSource, syncPublicSource } from '~/utils/services/public-source'
 import { fetchGroups } from '~/utils/services/group'
-import type { Group } from '~/utils/schemas/group'
 import UiButton from '~/components/ui/button/button.vue'
 import UiInput from '~/components/ui/input/input.vue'
 import UiCard from '~/components/ui/card/card.vue'
@@ -32,13 +31,14 @@ const showEditDialog = ref(false)
 const selectedSource = ref<PublicSource | null>(null)
 const sourceUrl = ref('')
 const sourceGroupId = ref('')
+const isCreateSubmitting = ref(false)
+const isEditSubmitting = ref(false)
 
 const createMutation = useMutation({
   mutationFn: (data: CreatePublicSource) => createPublicSource(data, baseURL),
   onSuccess: () => {
     showCreateDialog.value = false
-    sourceUrl.value = ''
-    sourceGroupId.value = ''
+    resetCreateForm()
     queryClient.invalidateQueries({ queryKey: ['public-sources'] })
   },
 })
@@ -48,9 +48,7 @@ const updateMutation = useMutation({
     updatePublicSource(id, data, baseURL),
   onSuccess: () => {
     showEditDialog.value = false
-    sourceUrl.value = ''
-    sourceGroupId.value = ''
-    selectedSource.value = null
+    resetEditForm()
     queryClient.invalidateQueries({ queryKey: ['public-sources'] })
   },
 })
@@ -70,20 +68,30 @@ const syncMutation = useMutation({
 })
 
 function handleCreateSource() {
-  if (!sourceUrl.value.trim() || !sourceGroupId.value) return
+  if (!sourceUrl.value.trim() || !sourceGroupId.value || isCreateSubmitting.value) return
+  isCreateSubmitting.value = true
   createMutation.mutate({
     url: sourceUrl.value,
     group_id: sourceGroupId.value,
+  }, {
+    onSettled: () => {
+      isCreateSubmitting.value = false
+    },
   })
 }
 
 function handleEditSource() {
-  if (!selectedSource.value || !sourceUrl.value.trim() || !sourceGroupId.value) return
+  if (!selectedSource.value || !sourceUrl.value.trim() || !sourceGroupId.value || isEditSubmitting.value) return
+  isEditSubmitting.value = true
   updateMutation.mutate({
     id: selectedSource.value.id,
     data: {
       url: sourceUrl.value,
       group_id: sourceGroupId.value,
+    },
+  }, {
+    onSettled: () => {
+      isEditSubmitting.value = false
     },
   })
 }
@@ -98,6 +106,8 @@ function handleSyncSource(source: PublicSource) {
 }
 
 function openEditDialog(source: PublicSource) {
+  updateMutation.reset()
+  isEditSubmitting.value = false
   selectedSource.value = source
   sourceUrl.value = source.url
   sourceGroupId.value = source.group_id
@@ -105,16 +115,40 @@ function openEditDialog(source: PublicSource) {
 }
 
 function openCreateDialog() {
+  createMutation.reset()
+  resetCreateForm()
+  showCreateDialog.value = true
+}
+
+function closeCreateDialog() {
+  createMutation.reset()
+  showCreateDialog.value = false
+  resetCreateForm()
+}
+
+function closeEditDialog() {
+  updateMutation.reset()
+  showEditDialog.value = false
+  resetEditForm()
+}
+
+function resetCreateForm() {
   sourceUrl.value = ''
   sourceGroupId.value = ''
-  showCreateDialog.value = true
+  isCreateSubmitting.value = false
+}
+
+function resetEditForm() {
+  sourceUrl.value = ''
+  sourceGroupId.value = ''
+  selectedSource.value = null
+  isEditSubmitting.value = false
 }
 </script>
 
 <template>
   <div class="space-y-4">
-    <div class="flex justify-between items-center">
-      <h2 class="text-xl font-semibold">Public Sources</h2>
+    <div class="flex justify-end items-center">
       <UiButton @click="openCreateDialog">
         Add Source
       </UiButton>
@@ -197,14 +231,14 @@ function openCreateDialog() {
           </div>
         </CardContent>
         <CardFooter class="flex justify-end gap-2">
-          <UiButton variant="outline" @click="showCreateDialog = false">
+          <UiButton variant="outline" @click="closeCreateDialog">
             Cancel
           </UiButton>
           <UiButton
-            :disabled="!sourceUrl.trim() || !sourceGroupId || createMutation.isPending"
+            :disabled="!sourceUrl.trim() || !sourceGroupId || isCreateSubmitting"
             @click="handleCreateSource"
           >
-            {{ createMutation.isPending ? 'Adding...' : 'Add' }}
+            {{ isCreateSubmitting ? 'Adding...' : 'Add' }}
           </UiButton>
         </CardFooter>
       </UiCard>
@@ -239,14 +273,14 @@ function openCreateDialog() {
           </div>
         </CardContent>
         <CardFooter class="flex justify-end gap-2">
-          <UiButton variant="outline" @click="showEditDialog = false">
+          <UiButton variant="outline" @click="closeEditDialog">
             Cancel
           </UiButton>
           <UiButton
-            :disabled="!sourceUrl.trim() || !sourceGroupId || updateMutation.isPending"
+            :disabled="!sourceUrl.trim() || !sourceGroupId || isEditSubmitting"
             @click="handleEditSource"
           >
-            {{ updateMutation.isPending ? 'Updating...' : 'Update' }}
+            {{ isEditSubmitting ? 'Updating...' : 'Update' }}
           </UiButton>
         </CardFooter>
       </UiCard>

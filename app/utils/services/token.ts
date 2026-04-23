@@ -13,10 +13,11 @@ interface ListTokensResponse {
 }
 
 export async function fetchTokens(baseURL: string): Promise<Token[]> {
-  const data = await $fetch<ListTokensResponse>(`${baseURL}/v1/tokens`, {
+  const data = await $fetch<ListTokensResponse | unknown[]>(`${baseURL}/v1/tokens`, {
     headers: getAuthHeaders(),
   })
-  return z.array(TokenSchema).parse(data.tokens ?? [])
+  const tokens = Array.isArray(data) ? data : (data.tokens ?? [])
+  return z.array(TokenSchema).parse(tokens)
 }
 
 export async function createToken(token: CreateToken, baseURL: string): Promise<IssuedToken> {
@@ -28,7 +29,14 @@ export async function createToken(token: CreateToken, baseURL: string): Promise<
   return IssuedTokenSchema.parse(data)
 }
 
-export async function deleteToken(id: string, baseURL: string): Promise<void> {
+export async function deactivateToken(id: string, baseURL: string): Promise<void> {
+  await $fetch(`${baseURL}/v1/tokens/${id}/deactivate`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  })
+}
+
+export async function removeToken(id: string, baseURL: string): Promise<void> {
   await $fetch(`${baseURL}/v1/tokens/${id}`, {
     method: 'DELETE',
     headers: getAuthHeaders(),

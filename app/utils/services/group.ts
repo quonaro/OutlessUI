@@ -7,10 +7,11 @@ interface ListGroupsResponse {
 }
 
 export async function fetchGroups(baseURL: string): Promise<Group[]> {
-  const data = await $fetch<ListGroupsResponse>(`${baseURL}/v1/groups`, {
+  const data = await $fetch<ListGroupsResponse | unknown[]>(`${baseURL}/v1/groups`, {
     headers: getAuthHeaders(),
   })
-  return z.array(GroupSchema).parse(data.groups)
+  const groups = Array.isArray(data) ? data : data.groups
+  return z.array(GroupSchema).parse(groups)
 }
 
 export async function createGroup(group: CreateGroup, baseURL: string): Promise<Group> {
