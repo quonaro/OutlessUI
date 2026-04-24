@@ -9,12 +9,14 @@ import {
 
 import { useSidebar } from '~/composables/useSidebar'
 import { useAuth } from '~/composables/useAuth'
+import { useAdminRealtimeStatus } from '~/utils/admin-realtime'
 import logoImage from '~/assets/img/logo-d-a.webp'
 import ThemeToggle from './ThemeToggle.vue'
 
 const sidebar = useSidebar()
 const auth = useAuth()
 const route = useRoute()
+const { isBackendAvailable, isConnecting } = useAdminRealtimeStatus()
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
@@ -56,6 +58,11 @@ const handleLogout = () => {
           />
           <span v-if="sidebar.isExpanded" class="font-bold text-lg text-foreground">
             Outless
+            <span
+              class="ml-2 inline-block h-2.5 w-2.5 rounded-full"
+              :class="isBackendAvailable ? 'bg-emerald-500' : 'bg-red-500'"
+              :title="isBackendAvailable ? 'Backend available' : (isConnecting ? 'Connecting to backend...' : 'Backend unavailable')"
+            />
           </span>
         </div>
         <ThemeToggle />

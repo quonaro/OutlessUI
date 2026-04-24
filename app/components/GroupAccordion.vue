@@ -52,10 +52,26 @@ const deleteMutation = useMutation({
 })
 const probeMutation = useMutation({
   mutationFn: ({ id, mode, probeURL }: { id: string, mode: 'normal' | 'fast', probeURL?: string }) => probeNode(id, baseURL, mode, probeURL),
-  onSuccess: (result) => {
+  onSuccess: (result, variables) => {
+    const targetNodeID = result.nodeID || variables.id
     if (result.jobID) {
-      trackProbeJob(result.nodeID || '', result.jobID)
+      trackProbeJob(targetNodeID, result.jobID, {
+        onFinish: () => {
+          const current = new Set(probingNodeIDs.value)
+          current.delete(targetNodeID)
+          probingNodeIDs.value = current
+        },
+      })
+      return
     }
+    const current = new Set(probingNodeIDs.value)
+    current.delete(targetNodeID)
+    probingNodeIDs.value = current
+  },
+  onError: (_error, variables) => {
+    const current = new Set(probingNodeIDs.value)
+    current.delete(variables.id)
+    probingNodeIDs.value = current
   },
 })
 const updateGroupMutation = useMutation({
@@ -175,13 +191,7 @@ function retryNode(payload: { node: Node, mode: 'normal' | 'fast', probeURL?: st
   const next = new Set(probingNodeIDs.value)
   next.add(node.id)
   probingNodeIDs.value = next
-  probeMutation.mutate({ id: node.id, mode: payload.mode, probeURL: payload.probeURL }, {
-    onSettled: () => {
-      const current = new Set(probingNodeIDs.value)
-      current.delete(node.id)
-      probingNodeIDs.value = current
-    },
-  })
+  probeMutation.mutate({ id: node.id, mode: payload.mode, probeURL: payload.probeURL })
 }
 function deleteUnavailable(group: Group) {
   if (!confirm(`Delete all unavailable nodes in ${group.name}?`)) return

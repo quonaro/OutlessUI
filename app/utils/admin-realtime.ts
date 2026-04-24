@@ -1,4 +1,5 @@
 import type { QueryClient } from '@tanstack/vue-query'
+import { computed, readonly, ref } from 'vue'
 
 let queryClient: QueryClient | null = null
 let apiBase = ''
@@ -8,6 +9,8 @@ let socket: WebSocket | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 const pendingSends: string[] = []
 const maxPending = 32
+const wsConnected = ref(false)
+const wsConnecting = ref(false)
 
 function flushPendingSends() {
   if (!socket || socket.readyState !== WebSocket.OPEN) return
@@ -109,6 +112,8 @@ export function disconnectAdminRealtime() {
     socket.close()
     socket = null
   }
+  wsConnected.value = false
+  wsConnecting.value = false
 }
 
 export function connectAdminRealtime() {
@@ -120,15 +125,21 @@ export function connectAdminRealtime() {
   }
   const url = buildWsURL(apiBase, token)
   if (socket?.readyState === WebSocket.OPEN) {
+    wsConnected.value = true
+    wsConnecting.value = false
     return
   }
   if (socket?.readyState === WebSocket.CONNECTING) {
+    wsConnecting.value = true
     return
   }
   disconnectAdminRealtime()
+  wsConnecting.value = true
   const ws = new WebSocket(url)
   socket = ws
   ws.onopen = () => {
+    wsConnected.value = true
+    wsConnecting.value = false
     flushPendingSends()
   }
   ws.onmessage = (ev) => {
@@ -141,12 +152,15 @@ export function connectAdminRealtime() {
   }
   ws.onclose = () => {
     socket = null
+    wsConnected.value = false
+    wsConnecting.value = false
     const t = getToken()
     if (t && apiBase) {
       reconnectTimer = setTimeout(() => connectAdminRealtime(), 2000)
     }
   }
   ws.onerror = () => {
+    wsConnected.value = false
     ws.close()
   }
 }
@@ -156,4 +170,13 @@ export function ensureAdminRealtimeConnected() {
   if (!token) return
   if (socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) return
   connectAdminRealtime()
+}
+
+export function useAdminRealtimeStatus() {
+  const isBackendAvailable = computed(() => wsConnected.value)
+  return {
+    isConnected: readonly(wsConnected),
+    isConnecting: readonly(wsConnecting),
+    isBackendAvailable,
+  }
 }

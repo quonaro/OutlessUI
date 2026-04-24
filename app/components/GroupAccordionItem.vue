@@ -492,7 +492,11 @@ function normalizeProbeStatuses(raw: unknown[]): Array<'healthy' | 'unhealthy' |
             v-for="node in displayNodes"
             :key="node.id"
             class="px-3 py-2"
-            :class="isUnavailable(node.status) ? 'border-red-400/60 bg-red-500/5' : ''"
+            :class="props.probingIds.has(node.id)
+              ? 'border-blue-400/60 bg-blue-500/5'
+              : isUnavailable(node.status)
+                ? 'border-red-400/60 bg-red-500/5'
+                : ''"
           >
             <CardContent class="p-0">
               <div class="flex items-center gap-2">
@@ -539,6 +543,12 @@ function normalizeProbeStatuses(raw: unknown[]): Array<'healthy' | 'unhealthy' |
                       :class="probeStateClass(props.probeNodeState(node.id)!.status)"
                     >
                       {{ probeStateLabel(props.probeNodeState(node.id)!.status) }}
+                    </span>
+                    <span
+                      v-else-if="props.probingIds.has(node.id)"
+                      class="ml-2 rounded border border-blue-500/40 bg-blue-500/10 px-1.5 py-0.5 text-blue-700"
+                    >
+                      Checking
                     </span>
                   </p>
                 </div>

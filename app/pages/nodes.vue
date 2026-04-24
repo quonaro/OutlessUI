@@ -174,10 +174,26 @@ function formatCountdown(totalMS: number): string {
 
 const probeNodeMutation = useMutation({
   mutationFn: ({ id, mode, probeURL }: { id: string, mode: 'normal' | 'fast', probeURL?: string }) => probeNode(id, baseURL, mode, probeURL),
-  onSuccess: (result) => {
+  onSuccess: (result, variables) => {
+    const targetNodeID = result.nodeID || variables.id
     if (result.jobID) {
-      trackProbeJob(result.nodeID || '', result.jobID)
+      trackProbeJob(targetNodeID, result.jobID, {
+        onFinish: () => {
+          const current = new Set(probingNodeIDs.value)
+          current.delete(targetNodeID)
+          probingNodeIDs.value = current
+        },
+      })
+      return
     }
+    const current = new Set(probingNodeIDs.value)
+    current.delete(targetNodeID)
+    probingNodeIDs.value = current
+  },
+  onError: (_error, variables) => {
+    const current = new Set(probingNodeIDs.value)
+    current.delete(variables.id)
+    probingNodeIDs.value = current
   },
 })
 
@@ -295,13 +311,7 @@ function confirmNodeProbeStart() {
   const next = new Set(probingNodeIDs.value)
   next.add(node.id)
   probingNodeIDs.value = next
-  probeNodeMutation.mutate({ id: node.id, mode: nodeProbeModeSelection.value, probeURL: nodeProbeURLSelection.value.trim() }, {
-    onSettled: () => {
-      const current = new Set(probingNodeIDs.value)
-      current.delete(node.id)
-      probingNodeIDs.value = current
-    },
-  })
+  probeNodeMutation.mutate({ id: node.id, mode: nodeProbeModeSelection.value, probeURL: nodeProbeURLSelection.value.trim() })
   nodeProbeFormOpen.value = false
 }
 
@@ -488,7 +498,12 @@ watch([nodeProbeModeSelection, nodeProbeURLSelection], ([mode, probeURL]) => {
         />
 
         <div v-else class="space-y-2">
-          <UiCard v-for="node in filteredFlatNodes" :key="node.id" class="px-3 py-2">
+          <UiCard
+            v-for="node in filteredFlatNodes"
+            :key="node.id"
+            class="px-3 py-2"
+            :class="probingNodeIDs.has(node.id) ? 'border-blue-400/60 bg-blue-500/5' : ''"
+          >
             <CardContent class="p-0">
               <div class="flex items-center justify-between gap-2">
                 <div class="max-w-[52%] min-w-0">
@@ -515,6 +530,12 @@ watch([nodeProbeModeSelection, nodeProbeURLSelection], ([mode, probeURL]) => {
                           : 'bg-amber-500/15 text-amber-700'"
                     >
                       {{ node.status }}
+                    </span>
+                    <span
+                      v-if="probingNodeIDs.has(node.id)"
+                      class="ml-2 inline-flex items-center rounded border border-blue-500/40 bg-blue-500/10 px-1.5 py-0.5 text-blue-700"
+                    >
+                      Checking...
                     </span>
                   </p>
                 </div>
