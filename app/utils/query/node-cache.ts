@@ -60,7 +60,13 @@ function applyPatchesToNode(node: Node, patches: Map<string, NodePatch>): Node {
 function patchManyInCacheData(oldData: unknown, patches: Map<string, NodePatch>): unknown {
   if (patches.size === 0) return oldData
   if (isNodeArray(oldData)) {
-    return oldData.map((node) => applyPatchesToNode(node, patches))
+    const seen = new Map<string, Node>()
+    for (const node of oldData) {
+      if (!seen.has(node.id)) {
+        seen.set(node.id, applyPatchesToNode(node, patches))
+      }
+    }
+    return Array.from(seen.values())
   }
   if (typeof oldData === 'object' && oldData !== null && 'pages' in oldData) {
     const inf = oldData as { pages?: Array<{ nodes?: Node[] }> }
@@ -70,7 +76,15 @@ function patchManyInCacheData(oldData: unknown, patches: Map<string, NodePatch>)
       pages: inf.pages.map((page) => ({
         ...page,
         nodes: Array.isArray(page.nodes)
-          ? page.nodes.map((node) => applyPatchesToNode(node, patches))
+          ? (() => {
+            const seen = new Map<string, Node>()
+            for (const node of page.nodes) {
+              if (!seen.has(node.id)) {
+                seen.set(node.id, applyPatchesToNode(node, patches))
+              }
+            }
+            return Array.from(seen.values())
+          })()
           : page.nodes,
       })),
     }
