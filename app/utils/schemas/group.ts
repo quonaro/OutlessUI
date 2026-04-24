@@ -16,7 +16,7 @@ export const GroupSchema = z.object({
 export const CreateGroupSchema = z.object({
   name: z.string().min(1),
   source_url: z.string().optional().default(''),
-  auto_delete_unavailable: z.boolean().optional(),
+  auto_delete_unavailable: z.boolean().optional().default(false),
 })
 
 export const UpdateGroupSchema = CreateGroupSchema
