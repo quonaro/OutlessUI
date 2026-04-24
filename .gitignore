@@ -30,6 +30,8 @@ Thumbs.db
 .cursor/
 .windsurf/
 .antigravity/
+.agents/
+
 .idea
 
 # Generic temp/patch files

@@ -1,21 +1,17 @@
 import { useQueryClient } from '@tanstack/vue-query'
-import { ref, shallowRef } from 'vue'
+import { ref, shallowRef, computed, watch } from 'vue'
 import {
   fetchGroupProbeUnavailableState,
-  type GroupProbeUnavailableDoneEvent,
-  type GroupProbeUnavailableNodeEvent,
   type GroupProbeUnavailableStateEvent,
-  type GroupSyncDoneEvent,
-  type GroupSyncNodeEvent,
-  type GroupSyncStateEvent,
 } from '~/utils/services/group'
 import {
   ensureAdminRealtimeConnected,
-  isProbeStaleIdleIgnoreSuspended,
   sendAdminRealtime,
   subscribeGroupSyncChannel,
 } from '~/utils/admin-realtime'
-import { schedulePatchNodeInAllNodeQueries } from '~/utils/query/node-cache'
+import { DEFAULT_PROBE_STATUSES, type ProbeMode, normalizeProbeStatuses, normalizeProbeMode } from '~/utils/groups/probe-utils'
+import { saveProbeStateToStorage as saveProbeStateToStorageUtil, clearProbeStateFromStorage as clearProbeStateFromStorageUtil, loadProbeStateFromStorage, type ProbeState } from '~/utils/groups/probe-storage'
+import { createWsHandler, type SyncStateRefs } from '~/utils/groups/sync-ws-handler'
 
 export interface SyncNodeStatus {
   node_id: string
@@ -34,9 +30,6 @@ export interface ProbeUnavailableNodeStatus {
   country?: string
   error?: string
 }
-
-const DEFAULT_PROBE_STATUSES: Array<'healthy' | 'unhealthy' | 'unknown'> = ['unknown', 'unhealthy', 'healthy']
-type ProbeMode = 'normal' | 'fast'
 
 export function useGroupSync(groupId: string) {
   const queryClient = useQueryClient()
@@ -74,62 +67,83 @@ export function useGroupSync(groupId: string) {
 
   // Restore state from localStorage on initialization
   if (import.meta.client) {
-    const saved = localStorage.getItem(storageKey.value)
+    const saved = loadProbeStateFromStorage(storageKey.value)
     if (saved) {
-      try {
-        const parsed = JSON.parse(saved)
-        if (typeof parsed.isProbingUnavailable === 'boolean') isProbingUnavailable.value = parsed.isProbingUnavailable
-        if (typeof parsed.probeUnavailableTotal === 'number') probeUnavailableTotal.value = parsed.probeUnavailableTotal
-        if (typeof parsed.probeUnavailableProcessed === 'number') probeUnavailableProcessed.value = parsed.probeUnavailableProcessed
-        if (typeof parsed.probeUnavailableActive === 'number') probeUnavailableActive.value = parsed.probeUnavailableActive
-        if (typeof parsed.probeUnavailableCompleted === 'number') probeUnavailableCompleted.value = parsed.probeUnavailableCompleted
-        if (typeof parsed.probeUnavailableRatePerSec === 'number') probeUnavailableRatePerSec.value = parsed.probeUnavailableRatePerSec
-        if (parsed.probeUnavailableEtaSec !== null && typeof parsed.probeUnavailableEtaSec === 'number') probeUnavailableEtaSec.value = parsed.probeUnavailableEtaSec
-        if (Array.isArray(parsed.probeUnavailableStatuses)) probeUnavailableStatuses.value = normalizeProbeStatuses(parsed.probeUnavailableStatuses)
-        if (parsed.probeUnavailableMode === 'normal' || parsed.probeUnavailableMode === 'fast') probeUnavailableMode.value = parsed.probeUnavailableMode
-        if (typeof parsed.probeUnavailableProbeURL === 'string') probeUnavailableProbeURL.value = parsed.probeUnavailableProbeURL
-      } catch (err) {
-        /* ignore invalid localStorage payload */
-      }
+      if (typeof saved.isProbingUnavailable === 'boolean') isProbingUnavailable.value = saved.isProbingUnavailable
+      if (typeof saved.probeUnavailableTotal === 'number') probeUnavailableTotal.value = saved.probeUnavailableTotal
+      if (typeof saved.probeUnavailableProcessed === 'number') probeUnavailableProcessed.value = saved.probeUnavailableProcessed
+      if (typeof saved.probeUnavailableActive === 'number') probeUnavailableActive.value = saved.probeUnavailableActive
+      if (typeof saved.probeUnavailableCompleted === 'number') probeUnavailableCompleted.value = saved.probeUnavailableCompleted
+      if (typeof saved.probeUnavailableRatePerSec === 'number') probeUnavailableRatePerSec.value = saved.probeUnavailableRatePerSec
+      if (saved.probeUnavailableEtaSec !== null && typeof saved.probeUnavailableEtaSec === 'number') probeUnavailableEtaSec.value = saved.probeUnavailableEtaSec
+      if (Array.isArray(saved.probeUnavailableStatuses)) probeUnavailableStatuses.value = normalizeProbeStatuses(saved.probeUnavailableStatuses)
+      if (saved.probeUnavailableMode === 'normal' || saved.probeUnavailableMode === 'fast') probeUnavailableMode.value = saved.probeUnavailableMode
+      if (typeof saved.probeUnavailableProbeURL === 'string') probeUnavailableProbeURL.value = saved.probeUnavailableProbeURL
     }
   }
 
   // Watch for state changes to track progress and persist to localStorage
   if (import.meta.client) {
     watch(isProbingUnavailable, () => {
-      saveProbeStateToStorage()
+      saveProbeStateToStorageUtil(storageKey.value, {
+        isProbingUnavailable: isProbingUnavailable.value,
+        probeUnavailableTotal: probeUnavailableTotal.value,
+        probeUnavailableProcessed: probeUnavailableProcessed.value,
+        probeUnavailableActive: probeUnavailableActive.value,
+        probeUnavailableCompleted: probeUnavailableCompleted.value,
+        probeUnavailableRatePerSec: probeUnavailableRatePerSec.value,
+        probeUnavailableEtaSec: probeUnavailableEtaSec.value,
+        probeUnavailableStatuses: probeUnavailableStatuses.value,
+        probeUnavailableMode: probeUnavailableMode.value,
+        probeUnavailableProbeURL: probeUnavailableProbeURL.value,
+      })
     })
     watch([probeUnavailableTotal, probeUnavailableProcessed], () => {
-      saveProbeStateToStorage()
+      saveProbeStateToStorageUtil(storageKey.value, {
+        isProbingUnavailable: isProbingUnavailable.value,
+        probeUnavailableTotal: probeUnavailableTotal.value,
+        probeUnavailableProcessed: probeUnavailableProcessed.value,
+        probeUnavailableActive: probeUnavailableActive.value,
+        probeUnavailableCompleted: probeUnavailableCompleted.value,
+        probeUnavailableRatePerSec: probeUnavailableRatePerSec.value,
+        probeUnavailableEtaSec: probeUnavailableEtaSec.value,
+        probeUnavailableStatuses: probeUnavailableStatuses.value,
+        probeUnavailableMode: probeUnavailableMode.value,
+        probeUnavailableProbeURL: probeUnavailableProbeURL.value,
+      })
     })
     watch([probeUnavailableActive, probeUnavailableCompleted, probeUnavailableRatePerSec, probeUnavailableEtaSec], () => {
-      saveProbeStateToStorage()
+      saveProbeStateToStorageUtil(storageKey.value, {
+        isProbingUnavailable: isProbingUnavailable.value,
+        probeUnavailableTotal: probeUnavailableTotal.value,
+        probeUnavailableProcessed: probeUnavailableProcessed.value,
+        probeUnavailableActive: probeUnavailableActive.value,
+        probeUnavailableCompleted: probeUnavailableCompleted.value,
+        probeUnavailableRatePerSec: probeUnavailableRatePerSec.value,
+        probeUnavailableEtaSec: probeUnavailableEtaSec.value,
+        probeUnavailableStatuses: probeUnavailableStatuses.value,
+        probeUnavailableMode: probeUnavailableMode.value,
+        probeUnavailableProbeURL: probeUnavailableProbeURL.value,
+      })
     })
     watch([probeUnavailableStatuses, probeUnavailableMode, probeUnavailableProbeURL], () => {
-      saveProbeStateToStorage()
+      saveProbeStateToStorageUtil(storageKey.value, {
+        isProbingUnavailable: isProbingUnavailable.value,
+        probeUnavailableTotal: probeUnavailableTotal.value,
+        probeUnavailableProcessed: probeUnavailableProcessed.value,
+        probeUnavailableActive: probeUnavailableActive.value,
+        probeUnavailableCompleted: probeUnavailableCompleted.value,
+        probeUnavailableRatePerSec: probeUnavailableRatePerSec.value,
+        probeUnavailableEtaSec: probeUnavailableEtaSec.value,
+        probeUnavailableStatuses: probeUnavailableStatuses.value,
+        probeUnavailableMode: probeUnavailableMode.value,
+        probeUnavailableProbeURL: probeUnavailableProbeURL.value,
+      })
     })
-  }
-
-  function saveProbeStateToStorage() {
-    if (!import.meta.client) return
-    const state = {
-      isProbingUnavailable: isProbingUnavailable.value,
-      probeUnavailableTotal: probeUnavailableTotal.value,
-      probeUnavailableProcessed: probeUnavailableProcessed.value,
-      probeUnavailableActive: probeUnavailableActive.value,
-      probeUnavailableCompleted: probeUnavailableCompleted.value,
-      probeUnavailableRatePerSec: probeUnavailableRatePerSec.value,
-      probeUnavailableEtaSec: probeUnavailableEtaSec.value,
-      probeUnavailableStatuses: probeUnavailableStatuses.value,
-      probeUnavailableMode: probeUnavailableMode.value,
-      probeUnavailableProbeURL: probeUnavailableProbeURL.value,
-    }
-    localStorage.setItem(storageKey.value, JSON.stringify(state))
   }
 
   function clearProbeStateFromStorage() {
-    if (!import.meta.client) return
-    localStorage.removeItem(storageKey.value)
+    clearProbeStateFromStorageUtil(storageKey.value)
   }
 
   let unsubscribe: (() => void) | null = null
@@ -494,21 +508,4 @@ export function useGroupSync(groupId: string) {
     stopSync,
     stopProbeUnavailable,
   }
-}
-
-function normalizeProbeStatuses(input: Array<'healthy' | 'unhealthy' | 'unknown'> | string[]): Array<'healthy' | 'unhealthy' | 'unknown'> {
-  const out: Array<'healthy' | 'unhealthy' | 'unknown'> = []
-  const seen = new Set<string>()
-  for (const raw of input) {
-    const item = String(raw).trim().toLowerCase()
-    if (item !== 'healthy' && item !== 'unhealthy' && item !== 'unknown') continue
-    if (seen.has(item)) continue
-    seen.add(item)
-    out.push(item)
-  }
-  return out.length > 0 ? out : [...DEFAULT_PROBE_STATUSES]
-}
-
-function normalizeProbeMode(mode: unknown): ProbeMode {
-  return String(mode).toLowerCase().trim() === 'fast' ? 'fast' : 'normal'
 }
