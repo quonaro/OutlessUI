@@ -7,6 +7,7 @@ import { useTokens } from '~/composables/tokens/useTokens'
 import { useCreateToken } from '~/composables/tokens/useCreateToken'
 import { useDeleteToken } from '~/composables/tokens/useDeleteToken'
 import { useRemoveToken } from '~/composables/tokens/useRemoveToken'
+import { useActivateToken } from '~/composables/tokens/useActivateToken'
 import { useGroups } from '~/composables/groups/useGroups'
 import UiButton from '~/components/ui/button/button.vue'
 import UiInput from '~/components/ui/input/input.vue'
@@ -32,6 +33,7 @@ const selectedAccessURL = ref('')
 const issuedAccessURL = ref('')
 const isIssueSubmitting = ref(false)
 const pendingDeactivateId = ref('')
+const pendingActivateId = ref('')
 const pendingRemoveId = ref('')
 
 const ownerInput = ref('')
@@ -52,6 +54,9 @@ const createMutation = useCreateToken({
 })
 
 const deleteMutation = useDeleteToken({
+  onSuccess: invalidate,
+})
+const activateMutation = useActivateToken({
   onSuccess: invalidate,
 })
 const removeMutation = useRemoveToken({
@@ -117,6 +122,16 @@ function handleDeactivate(token: Token) {
   deleteMutation.mutate(token.id, {
     onSettled: () => {
       pendingDeactivateId.value = ''
+    },
+  })
+}
+
+function handleActivate(token: Token) {
+  if (!confirm(`Activate token for ${token.owner}?`)) return
+  pendingActivateId.value = token.id
+  activateMutation.mutate(token.id, {
+    onSettled: () => {
+      pendingActivateId.value = ''
     },
   })
 }
@@ -245,15 +260,24 @@ function handleGroupCheckboxChange(groupID: string, event: Event) {
             >
               Deactivate
             </UiButton>
-            <UiButton
-              v-else
-              variant="destructive"
-              size="sm"
-              :disabled="pendingRemoveId === token.id"
-              @click="handleRemove(token)"
-            >
-              Remove
-            </UiButton>
+            <template v-else>
+              <UiButton
+                variant="default"
+                size="sm"
+                :disabled="pendingActivateId === token.id"
+                @click="handleActivate(token)"
+              >
+                Activate
+              </UiButton>
+              <UiButton
+                variant="destructive"
+                size="sm"
+                :disabled="pendingRemoveId === token.id"
+                @click="handleRemove(token)"
+              >
+                Remove
+              </UiButton>
+            </template>
           </div>
         </div>
       </CardContent>

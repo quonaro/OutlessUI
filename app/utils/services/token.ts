@@ -36,6 +36,13 @@ export async function deactivateToken(id: string, baseURL: string): Promise<void
   })
 }
 
+export async function activateToken(id: string, baseURL: string): Promise<void> {
+  await $fetch(`${baseURL}/v1/tokens/${id}/activate`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  })
+}
+
 export async function removeToken(id: string, baseURL: string): Promise<void> {
   await $fetch(`${baseURL}/v1/tokens/${id}`, {
     method: 'DELETE',
