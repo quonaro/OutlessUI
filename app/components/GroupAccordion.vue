@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onBeforeUnmount, ref } from 'vue'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import type { Group } from '~/utils/schemas/group'
 import type { Node, NodeStatus } from '~/utils/schemas/node'
+import { useProbeJobNodePatch } from '~/composables/nodes/useProbeJobNodePatch'
 import { deleteNode, probeNode } from '~/utils/services/node'
 import { deleteUnavailableGroupNodes, updateGroup } from '~/utils/services/group'
 import { useGroupSync } from '~/composables/groups/useGroupSync'
@@ -21,6 +22,7 @@ const props = defineProps<{
 const queryClient = useQueryClient()
 const config = useRuntimeConfig()
 const baseURL = config.public.apiBase as string
+const { trackProbeJob, stopAllPolling } = useProbeJobNodePatch(baseURL)
 const syncStates: Record<string, ReturnType<typeof useGroupSync>> = {}
 const deletingNodeIDs = ref<Set<string>>(new Set())
 const probingNodeIDs = ref<Set<string>>(new Set())
@@ -50,9 +52,10 @@ const deleteMutation = useMutation({
 })
 const probeMutation = useMutation({
   mutationFn: ({ id, mode, probeURL }: { id: string, mode: 'normal' | 'fast', probeURL?: string }) => probeNode(id, baseURL, mode, probeURL),
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ['nodes'] })
-    queryClient.invalidateQueries({ queryKey: ['groups'] })
+  onSuccess: (result) => {
+    if (result.jobID) {
+      trackProbeJob(result.nodeID || '', result.jobID)
+    }
   },
 })
 const updateGroupMutation = useMutation({
@@ -228,6 +231,10 @@ function nodeSyncError(groupID: string, nodeID: string): string {
 function nodeProbeState(groupID: string, nodeID: string) {
   return stateForGroup(groupID).probingUnavailableNodes.value.get(nodeID) ?? null
 }
+
+onBeforeUnmount(() => {
+  stopAllPolling()
+})
 </script>
 
 <template>

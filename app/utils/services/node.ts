@@ -8,6 +8,26 @@ interface ListNodesResponse {
   has_more?: boolean
 }
 
+interface ProbeNodeAcceptedResponse {
+  job_id?: string
+  node_id?: string
+  status?: string
+  requested_by?: string
+}
+
+interface ProbeJobResponse {
+  id?: string
+  node_id?: string
+  status?: string
+}
+
+function unwrapBody<T extends object>(data: T | { body?: T }): T {
+  if (typeof data === 'object' && data !== null && 'body' in data) {
+    return ((data as { body?: T }).body ?? {}) as T
+  }
+  return data as T
+}
+
 export interface NodesPage {
   nodes: Node[]
   nextOffset: number | null
@@ -71,6 +91,14 @@ export async function createNode(node: CreateNode, baseURL: string): Promise<voi
   })
 }
 
+export async function fetchNodeByID(id: string, baseURL: string): Promise<Node> {
+  const data = await $fetch<{ node?: unknown } | unknown>(`${baseURL}/v1/nodes/${id}`, {
+    headers: getAuthHeaders(),
+  })
+  const raw = typeof data === 'object' && data !== null && 'node' in data ? (data as { node?: unknown }).node : data
+  return NodeSchema.parse(raw)
+}
+
 export async function updateNode(id: string, node: UpdateNode, baseURL: string): Promise<void> {
   await $fetch(`${baseURL}/v1/nodes/${id}`, {
     method: 'PUT',
@@ -86,10 +114,28 @@ export async function deleteNode(id: string, baseURL: string): Promise<void> {
   })
 }
 
-export async function probeNode(id: string, baseURL: string, mode: 'normal' | 'fast' = 'normal', probeURL = ''): Promise<void> {
-  await $fetch(`${baseURL}/v1/nodes/${id}/probe`, {
+export async function probeNode(id: string, baseURL: string, mode: 'normal' | 'fast' = 'normal', probeURL = ''): Promise<{ jobID: string, nodeID: string, status: string }> {
+  const data = await $fetch<{ body?: ProbeNodeAcceptedResponse } | ProbeNodeAcceptedResponse>(`${baseURL}/v1/nodes/${id}/probe`, {
     method: 'POST',
     body: { mode, probe_url: probeURL },
     headers: getAuthHeaders(),
   })
+  const payload = unwrapBody<ProbeNodeAcceptedResponse>(data)
+  return {
+    jobID: String(payload.job_id ?? ''),
+    nodeID: String(payload.node_id ?? id),
+    status: String(payload.status ?? 'pending'),
+  }
+}
+
+export async function fetchProbeJobStatus(jobID: string, baseURL: string): Promise<{ id: string, nodeID: string, status: string }> {
+  const data = await $fetch<{ body?: ProbeJobResponse } | ProbeJobResponse>(`${baseURL}/v1/probe-jobs/${jobID}`, {
+    headers: getAuthHeaders(),
+  })
+  const payload = unwrapBody<ProbeJobResponse>(data)
+  return {
+    id: String(payload.id ?? jobID),
+    nodeID: String(payload.node_id ?? ''),
+    status: String(payload.status ?? 'pending'),
+  }
 }

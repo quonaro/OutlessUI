@@ -11,6 +11,7 @@ import CardContent from '~/components/ui/card/CardContent.vue'
 import CardFooter from '~/components/ui/card/CardFooter.vue'
 import GroupAccordion from '~/components/GroupAccordion.vue'
 import { useInfiniteNodes } from '~/composables/nodes/useInfiniteNodes'
+import { useProbeJobNodePatch } from '~/composables/nodes/useProbeJobNodePatch'
 import { useGroups } from '~/composables/groups/useGroups'
 import type { Node } from '~/utils/schemas/node'
 import { createNode, deleteNode, probeNode } from '~/utils/services/node'
@@ -41,6 +42,7 @@ interface PublicRefreshStateMessage {
 const queryClient = useQueryClient()
 const config = useRuntimeConfig()
 const baseURL = config.public.apiBase as string
+const { trackProbeJob, stopAllPolling } = useProbeJobNodePatch(baseURL)
 const viewMode = ref<ViewMode>('grouped')
 
 const {
@@ -81,6 +83,7 @@ const groupNameInput = ref('')
 const groupSourceURLInput = ref('')
 const nodeURLInput = ref('')
 const nodeGroupIDInput = ref('')
+const createNodeErrorMessage = ref('')
 const isCreateGroupSubmitting = ref(false)
 const isCreateNodeSubmitting = ref(false)
 const deletingNodeIDs = ref<Set<string>>(new Set())
@@ -109,6 +112,7 @@ const createNodeMutation = useMutation({
     showCreateNodeDialog.value = false
     nodeURLInput.value = ''
     nodeGroupIDInput.value = ''
+    createNodeErrorMessage.value = ''
   },
 })
 
@@ -170,9 +174,10 @@ function formatCountdown(totalMS: number): string {
 
 const probeNodeMutation = useMutation({
   mutationFn: ({ id, mode, probeURL }: { id: string, mode: 'normal' | 'fast', probeURL?: string }) => probeNode(id, baseURL, mode, probeURL),
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ['nodes'] })
-    queryClient.invalidateQueries({ queryKey: ['groups'] })
+  onSuccess: (result) => {
+    if (result.jobID) {
+      trackProbeJob(result.nodeID || '', result.jobID)
+    }
   },
 })
 
@@ -236,11 +241,33 @@ function submitCreateGroup() {
 function submitCreateNode() {
   const url = nodeURLInput.value.trim()
   if (!url || isCreateNodeSubmitting.value) return
+  createNodeErrorMessage.value = ''
   isCreateNodeSubmitting.value = true
   createNodeMutation.mutate(
     { url, group_id: nodeGroupIDInput.value },
-    { onSettled: () => { isCreateNodeSubmitting.value = false } },
+    {
+      onError: (error) => {
+        createNodeErrorMessage.value = resolveCreateNodeErrorMessage(error)
+      },
+      onSettled: () => { isCreateNodeSubmitting.value = false },
+    },
   )
+}
+
+function resolveCreateNodeErrorMessage(error: unknown): string {
+  const statusCode = Number((error as { statusCode?: unknown })?.statusCode)
+  if (statusCode === 409) {
+    return 'Node with this URL already exists.'
+  }
+
+  const data = (error as { data?: unknown })?.data as { message?: unknown, detail?: unknown, title?: unknown } | undefined
+  if (typeof data?.message === 'string' && data.message.trim()) return data.message
+  if (typeof data?.detail === 'string' && data.detail.trim()) return data.detail
+  if (typeof data?.title === 'string' && data.title.trim()) return data.title
+
+  const message = (error as { message?: unknown })?.message
+  if (typeof message === 'string' && message.trim()) return message
+  return 'Failed to create node.'
 }
 
 function removeNode(node: Node) {
@@ -366,6 +393,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  stopAllPolling()
   stopRealtimeSubscription?.()
   stopRealtimeSubscription = null
 
@@ -580,9 +608,17 @@ watch([nodeProbeModeSelection, nodeProbeURLSelection], ([mode, probeURL]) => {
                 <option v-for="group in groups ?? []" :key="group.id" :value="group.id">{{ group.name }}</option>
               </select>
             </div>
+            <p v-if="createNodeErrorMessage" class="text-sm text-red-600 dark:text-red-400">
+              {{ createNodeErrorMessage }}
+            </p>
           </CardContent>
           <CardFooter class="flex justify-end gap-2">
-            <UiButton variant="outline" @click="showCreateNodeDialog = false">Cancel</UiButton>
+            <UiButton
+              variant="outline"
+              @click="showCreateNodeDialog = false; createNodeErrorMessage = ''"
+            >
+              Cancel
+            </UiButton>
             <UiButton :disabled="!nodeURLInput.trim() || isCreateNodeSubmitting" @click="submitCreateNode">
               {{ isCreateNodeSubmitting ? 'Creating...' : 'Create' }}
             </UiButton>

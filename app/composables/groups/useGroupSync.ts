@@ -13,6 +13,7 @@ import {
   sendAdminRealtime,
   subscribeGroupSyncChannel,
 } from '~/utils/admin-realtime'
+import { patchNodeInAllNodeQueries } from '~/utils/query/node-cache'
 
 export interface SyncNodeStatus {
   node_id: string
@@ -38,8 +39,8 @@ type ProbeMode = 'normal' | 'fast'
 export function useGroupSync(groupId: string) {
   const queryClient = useQueryClient()
 
-  /** Refresh nodes/groups after bulk probe or sync. Use invalidate (not reset) so the nodes query keeps cached pages during refetch — otherwise isLoading flips true, GroupAccordion unmounts, and in-flight probe UI state is lost. */
-  function refreshNodesAndGroupsAfterJob() {
+  /** Refresh nodes/groups after source sync jobs (import may add/remove nodes). */
+  function refreshAfterSyncJob() {
     void queryClient.invalidateQueries({ queryKey: ['nodes', 'infinite'] })
     void queryClient.invalidateQueries({ queryKey: ['groups'] })
   }
@@ -145,6 +146,12 @@ export function useGroupSync(groupId: string) {
       probingUnavailableNodes.value = next
       if (typeof ev.total === 'number') probeUnavailableTotal.value = ev.total
       if (typeof ev.processed === 'number') probeUnavailableProcessed.value = ev.processed
+      patchNodeInAllNodeQueries(queryClient, {
+        id: ev.node_id,
+        status: ev.node_status,
+        latency_ms: ev.latency_ms,
+        country: ev.country,
+      })
       return
     }
     if (t === 'probe_unavailable_done') {
@@ -153,7 +160,6 @@ export function useGroupSync(groupId: string) {
       if (typeof ev.total === 'number') probeUnavailableTotal.value = ev.total
       if (typeof ev.processed === 'number') probeUnavailableProcessed.value = ev.processed
       isProbingUnavailable.value = false
-      refreshNodesAndGroupsAfterJob()
       maybeUnsubscribe()
       return
     }
@@ -164,7 +170,6 @@ export function useGroupSync(groupId: string) {
       probeUnavailableTotal.value = typeof msg.total === 'number' ? msg.total : probeUnavailableTotal.value
       probeUnavailableProcessed.value = typeof msg.processed === 'number' ? msg.processed : probeUnavailableProcessed.value
       isProbingUnavailable.value = false
-      refreshNodesAndGroupsAfterJob()
       maybeUnsubscribe()
       return
     }
@@ -173,7 +178,6 @@ export function useGroupSync(groupId: string) {
       probeUnavailableTotal.value = typeof msg.total === 'number' ? msg.total : probeUnavailableTotal.value
       probeUnavailableProcessed.value = typeof msg.processed === 'number' ? msg.processed : probeUnavailableProcessed.value
       isProbingUnavailable.value = false
-      refreshNodesAndGroupsAfterJob()
       maybeUnsubscribe()
       return
     }
@@ -229,7 +233,7 @@ export function useGroupSync(groupId: string) {
       if (typeof ev.processed === 'number') syncProcessed.value = ev.processed
       if (typeof ev.added_count === 'number') syncAddedCount.value = ev.added_count
       isSyncing.value = false
-      refreshNodesAndGroupsAfterJob()
+      refreshAfterSyncJob()
       maybeUnsubscribe()
       return
     }
@@ -241,7 +245,7 @@ export function useGroupSync(groupId: string) {
       syncProcessed.value = typeof msg.processed === 'number' ? msg.processed : syncProcessed.value
       syncAddedCount.value = typeof msg.added_count === 'number' ? msg.added_count : syncAddedCount.value
       isSyncing.value = false
-      refreshNodesAndGroupsAfterJob()
+      refreshAfterSyncJob()
       maybeUnsubscribe()
       return
     }
@@ -252,7 +256,7 @@ export function useGroupSync(groupId: string) {
       syncAddedCount.value = typeof msg.added_count === 'number' ? msg.added_count : syncAddedCount.value
       isCancelled.value = true
       isSyncing.value = false
-      refreshNodesAndGroupsAfterJob()
+      refreshAfterSyncJob()
       maybeUnsubscribe()
     }
   }

@@ -28,3 +28,22 @@ Thumbs.db
 !.vscode/launch.json
 !.vscode/extensions.json
 .idea
+
+# Generic temp/patch files
+*.tmp
+*.temp
+*.bak
+*.orig
+*~
+tmp/
+
+# Build artifacts and generic binaries
+bin/
+build/
+*.exe
+*.dll
+*.so
+*.dylib
+*.bin
+*.o
+*.a
