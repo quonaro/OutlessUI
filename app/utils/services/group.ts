@@ -97,6 +97,10 @@ export interface GroupProbeUnavailableNodeEvent {
   latency_ms: number
   processed?: number
   total?: number
+  active?: number
+  completed?: number
+  rate_per_sec?: number
+  eta_sec?: number
   node_status?: 'healthy' | 'unhealthy' | 'unknown'
   country?: string
   error?: string
@@ -107,6 +111,10 @@ export interface GroupProbeUnavailableDoneEvent {
   probed: number
   processed?: number
   total?: number
+  active?: number
+  completed?: number
+  rate_per_sec?: number
+  eta_sec?: number
 }
 
 export interface GroupProbeUnavailableStateEvent {
@@ -114,9 +122,51 @@ export interface GroupProbeUnavailableStateEvent {
   running: boolean
   processed: number
   total: number
+  active?: number
+  completed?: number
+  rate_per_sec?: number
+  eta_sec?: number
   nodes: GroupProbeUnavailableNodeEvent[]
   error?: string
   statuses?: string[]
   mode?: 'normal' | 'fast'
   probe_url?: string
+}
+
+export async function fetchGroupProbeUnavailableState(id: string, baseURL: string): Promise<GroupProbeUnavailableStateEvent> {
+  const data = await $fetch<{ state: GroupProbeUnavailableStateEvent | undefined }>(
+    `${baseURL}/v1/groups/${id}/probe-unavailable-state`,
+    { headers: getAuthHeaders() },
+  )
+  const s = data.state
+  if (!s) {
+    return {
+      running: false,
+      total: 0,
+      processed: 0,
+      active: 0,
+      completed: 0,
+      rate_per_sec: 0,
+      eta_sec: undefined,
+      nodes: [],
+      error: undefined,
+      statuses: undefined,
+      mode: undefined,
+      probe_url: undefined,
+    }
+  }
+  return {
+    running: Boolean(s.running),
+    total: typeof s.total === 'number' ? s.total : 0,
+    processed: typeof s.processed === 'number' ? s.processed : 0,
+    active: typeof s.active === 'number' ? s.active : 0,
+    completed: typeof s.completed === 'number' ? s.completed : undefined,
+    rate_per_sec: typeof s.rate_per_sec === 'number' ? s.rate_per_sec : 0,
+    eta_sec: typeof s.eta_sec === 'number' ? s.eta_sec : undefined,
+    nodes: Array.isArray(s.nodes) ? s.nodes : [],
+    error: typeof s.error === 'string' ? s.error : undefined,
+    statuses: Array.isArray(s.statuses) ? s.statuses : undefined,
+    mode: s.mode,
+    probe_url: typeof s.probe_url === 'string' ? s.probe_url : undefined,
+  }
 }

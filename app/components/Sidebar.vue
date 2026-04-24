@@ -58,11 +58,20 @@ const handleLogout = () => {
           />
           <span v-if="sidebar.isExpanded" class="font-bold text-lg text-foreground">
             Outless
-            <span
-              class="ml-2 inline-block h-2.5 w-2.5 rounded-full"
-              :class="isBackendAvailable ? 'bg-emerald-500' : 'bg-red-500'"
-              :title="isBackendAvailable ? 'Backend available' : (isConnecting ? 'Connecting to backend...' : 'Backend unavailable')"
-            />
+            <!-- WebSocket state differs SSR vs client; avoid hydration mismatch -->
+            <ClientOnly>
+              <span
+                class="ml-2 inline-block h-2.5 w-2.5 rounded-full"
+                :class="isBackendAvailable ? 'bg-emerald-500' : 'bg-red-500'"
+                :title="isBackendAvailable ? 'Backend available' : (isConnecting ? 'Connecting to backend...' : 'Backend unavailable')"
+              />
+              <template #fallback>
+                <span
+                  class="ml-2 inline-block h-2.5 w-2.5 rounded-full bg-muted-foreground/40"
+                  title="Checking backend connection..."
+                />
+              </template>
+            </ClientOnly>
           </span>
         </div>
         <ThemeToggle />

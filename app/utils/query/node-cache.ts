@@ -46,3 +46,64 @@ export function patchNodeInAllNodeQueries(queryClient: QueryClient, patch: NodeP
   queryClient.setQueriesData({ queryKey: ['nodes'] }, (oldData) => patchNodeInCacheData(oldData, patch))
 }
 
+function mergeNodePatch(prev: NodePatch | undefined, next: NodePatch): NodePatch {
+  if (!prev) return next
+  return { ...prev, ...next, id: next.id }
+}
+
+function applyPatchesToNode(node: Node, patches: Map<string, NodePatch>): Node {
+  const p = patches.get(node.id)
+  if (!p) return node
+  return applyPatch(node, p)
+}
+
+function patchManyInCacheData(oldData: unknown, patches: Map<string, NodePatch>): unknown {
+  if (patches.size === 0) return oldData
+  if (isNodeArray(oldData)) {
+    return oldData.map((node) => applyPatchesToNode(node, patches))
+  }
+  if (typeof oldData === 'object' && oldData !== null && 'pages' in oldData) {
+    const inf = oldData as { pages?: Array<{ nodes?: Node[] }> }
+    if (!Array.isArray(inf.pages)) return oldData
+    return {
+      ...inf,
+      pages: inf.pages.map((page) => ({
+        ...page,
+        nodes: Array.isArray(page.nodes)
+          ? page.nodes.map((node) => applyPatchesToNode(node, patches))
+          : page.nodes,
+      })),
+    }
+  }
+  return oldData
+}
+
+let patchBatchRaf: number | null = null
+const patchBatchById = new Map<string, NodePatch>()
+let patchBatchClient: QueryClient | null = null
+
+function flushPatchBatch() {
+  patchBatchRaf = null
+  const qc = patchBatchClient
+  patchBatchClient = null
+  if (!qc || patchBatchById.size === 0) {
+    patchBatchById.clear()
+    return
+  }
+  const merged = new Map(patchBatchById)
+  patchBatchById.clear()
+  qc.setQueriesData({ queryKey: ['nodes'] }, (oldData) => patchManyInCacheData(oldData, merged))
+}
+
+/**
+ * Coalesces node patches across probe progress events so one TanStack write runs per animation frame
+ * (avoids O(nodes × pages) work per WebSocket message and main-thread stalls).
+ */
+export function schedulePatchNodeInAllNodeQueries(queryClient: QueryClient, patch: NodePatch) {
+  patchBatchClient = queryClient
+  const prev = patchBatchById.get(patch.id)
+  patchBatchById.set(patch.id, mergeNodePatch(prev, patch))
+  if (patchBatchRaf != null) return
+  patchBatchRaf = requestAnimationFrame(flushPatchBatch)
+}
+

@@ -35,6 +35,9 @@ const props = withDefaults(defineProps<{
   probeUnavailablePending: boolean
   probeUnavailableProcessedCount: number
   probeUnavailableTotalCount: number
+  probeUnavailableActiveCount: number
+  probeUnavailableRatePerSec: number
+  probeUnavailableEtaSec: number | null
   probeStatuses: Array<'healthy' | 'unhealthy' | 'unknown'>
   probeMode: 'normal' | 'fast'
   probeUrl: string
@@ -364,6 +367,19 @@ function normalizeProbeStatuses(raw: unknown[]): Array<'healthy' | 'unhealthy' |
   const normalized = defaultProbeStatuses.filter((s) => unique.has(s))
   return normalized.length > 0 ? normalized : [...defaultProbeStatuses]
 }
+
+function formatProbeRate(ratePerSec: number): string {
+  if (!Number.isFinite(ratePerSec) || ratePerSec <= 0) return '0.0 n/s'
+  return `${ratePerSec.toFixed(1)} n/s`
+}
+
+function formatEta(etaSec: number | null): string {
+  if (etaSec == null || etaSec < 0) return 'ETA --'
+  const total = Math.max(0, Math.floor(etaSec))
+  const minutes = Math.floor(total / 60)
+  const seconds = total % 60
+  return `ETA ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
 </script>
 
 <template>
@@ -425,6 +441,9 @@ function normalizeProbeStatuses(raw: unknown[]): Array<'healthy' | 'unhealthy' |
           }}
         </UiButton>
         <UiButton v-if="props.isSyncing || props.probeUnavailablePending" size="sm" variant="outline" @click.prevent="emit('cancelSync')">Cancel check</UiButton>
+      </div>
+      <div v-if="props.probeUnavailablePending || props.probeInterrupted" class="w-full text-right text-xs text-muted-foreground">
+        active: {{ props.probeUnavailableActiveCount }} · {{ formatProbeRate(props.probeUnavailableRatePerSec) }} · {{ formatEta(props.probeUnavailableEtaSec) }}
       </div>
     </div>
 

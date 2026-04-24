@@ -24,6 +24,10 @@ type WsPayload = Record<string, unknown>
 
 const groupSyncSubs = new Map<string, Set<(msg: WsPayload) => void>>()
 const globalSubs = new Set<(msg: WsPayload) => void>()
+const openHandlers = new Set<() => void>()
+/** After a reconnect, briefly trust idle `probe_unavailable_state` so the UI can recover if the tab missed done/cancel events. */
+let suppressProbeStaleIdleIgnoreUntil = 0
+let wsEverOpened = false
 
 export function setAdminRealtimeQueryClient(q: QueryClient) {
   queryClient = q
@@ -82,6 +86,22 @@ export function subscribeAdminRealtime(cb: (msg: WsPayload) => void): () => void
   }
 }
 
+/** Run after each successful WebSocket open (initial connect and reconnect). */
+export function onAdminRealtimeOpen(handler: () => void): () => void {
+  openHandlers.add(handler)
+  return () => {
+    openHandlers.delete(handler)
+  }
+}
+
+function notifyAdminRealtimeOpen() {
+  for (const h of [...openHandlers]) h()
+}
+
+export function isProbeStaleIdleIgnoreSuspended(): boolean {
+  return Date.now() < suppressProbeStaleIdleIgnoreUntil
+}
+
 export function subscribeGroupSyncChannel(groupId: string, cb: (msg: WsPayload) => void): () => void {
   if (!groupSyncSubs.has(groupId)) groupSyncSubs.set(groupId, new Set())
   const s = groupSyncSubs.get(groupId)!
@@ -114,6 +134,8 @@ export function disconnectAdminRealtime() {
   }
   wsConnected.value = false
   wsConnecting.value = false
+  wsEverOpened = false
+  suppressProbeStaleIdleIgnoreUntil = 0
 }
 
 export function connectAdminRealtime() {
@@ -140,7 +162,12 @@ export function connectAdminRealtime() {
   ws.onopen = () => {
     wsConnected.value = true
     wsConnecting.value = false
+    if (wsEverOpened) {
+      suppressProbeStaleIdleIgnoreUntil = Date.now() + 1500
+    }
+    wsEverOpened = true
     flushPendingSends()
+    notifyAdminRealtimeOpen()
   }
   ws.onmessage = (ev) => {
     try {

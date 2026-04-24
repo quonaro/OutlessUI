@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import type { Group } from '~/utils/schemas/group'
 import type { Node, NodeStatus } from '~/utils/schemas/node'
@@ -9,6 +9,7 @@ import { deleteUnavailableGroupNodes, updateGroup } from '~/utils/services/group
 import { useGroupSync } from '~/composables/groups/useGroupSync'
 import { useGroupAccordionFilters } from '~/composables/groups/useGroupAccordionFilters'
 import GroupAccordionItem from '~/components/GroupAccordionItem.vue'
+import { onAdminRealtimeOpen } from '~/utils/admin-realtime'
 
 const props = defineProps<{
   groups: Group[]
@@ -144,6 +145,15 @@ function probeUnavailableProcessedCount(groupId: string): number {
 function probeUnavailableTotalCount(groupId: string): number {
   return stateForGroup(groupId).probeUnavailableTotal.value
 }
+function probeUnavailableActiveCount(groupId: string): number {
+  return stateForGroup(groupId).probeUnavailableActive.value
+}
+function probeUnavailableRatePerSec(groupId: string): number {
+  return stateForGroup(groupId).probeUnavailableRatePerSec.value
+}
+function probeUnavailableEtaSec(groupId: string): number | null {
+  return stateForGroup(groupId).probeUnavailableEtaSec.value
+}
 function probeUnavailableStatuses(groupId: string): Array<'healthy' | 'unhealthy' | 'unknown'> {
   return stateForGroup(groupId).probeUnavailableStatuses.value
 }
@@ -242,7 +252,21 @@ function nodeProbeState(groupID: string, nodeID: string) {
   return stateForGroup(groupID).probingUnavailableNodes.value.get(nodeID) ?? null
 }
 
+let stopResyncOnWsOpen: (() => void) | null = null
+onMounted(() => {
+  if (!import.meta.client) return
+  stopResyncOnWsOpen = onAdminRealtimeOpen(() => {
+    for (const id of Object.keys(syncStates)) {
+      const st = syncStates[id]
+      if (!st) continue
+      st.requestProbeUnavailableState()
+      st.requestSyncState()
+    }
+  })
+})
 onBeforeUnmount(() => {
+  stopResyncOnWsOpen?.()
+  stopResyncOnWsOpen = null
   stopAllPolling()
 })
 </script>
@@ -272,6 +296,9 @@ onBeforeUnmount(() => {
       :probe-unavailable-pending="probeUnavailableIsRunning(group.id)"
       :probe-unavailable-processed-count="probeUnavailableProcessedCount(group.id)"
       :probe-unavailable-total-count="probeUnavailableTotalCount(group.id)"
+      :probe-unavailable-active-count="probeUnavailableActiveCount(group.id)"
+      :probe-unavailable-rate-per-sec="probeUnavailableRatePerSec(group.id)"
+      :probe-unavailable-eta-sec="probeUnavailableEtaSec(group.id)"
       :probe-statuses="probeUnavailableStatuses(group.id)"
       :probe-mode="probeUnavailableMode(group.id)"
       :probe-url="probeUnavailableProbeURL(group.id)"

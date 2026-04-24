@@ -1,19 +1,21 @@
 import { useQueryClient } from '@tanstack/vue-query'
 import { ref, shallowRef } from 'vue'
-import type {
-  GroupProbeUnavailableDoneEvent,
-  GroupProbeUnavailableNodeEvent,
-  GroupProbeUnavailableStateEvent,
-  GroupSyncDoneEvent,
-  GroupSyncNodeEvent,
-  GroupSyncStateEvent,
+import {
+  fetchGroupProbeUnavailableState,
+  type GroupProbeUnavailableDoneEvent,
+  type GroupProbeUnavailableNodeEvent,
+  type GroupProbeUnavailableStateEvent,
+  type GroupSyncDoneEvent,
+  type GroupSyncNodeEvent,
+  type GroupSyncStateEvent,
 } from '~/utils/services/group'
 import {
   ensureAdminRealtimeConnected,
+  isProbeStaleIdleIgnoreSuspended,
   sendAdminRealtime,
   subscribeGroupSyncChannel,
 } from '~/utils/admin-realtime'
-import { patchNodeInAllNodeQueries } from '~/utils/query/node-cache'
+import { schedulePatchNodeInAllNodeQueries } from '~/utils/query/node-cache'
 
 export interface SyncNodeStatus {
   node_id: string
@@ -38,6 +40,9 @@ type ProbeMode = 'normal' | 'fast'
 
 export function useGroupSync(groupId: string) {
   const queryClient = useQueryClient()
+  const runtimeConfig = useRuntimeConfig()
+
+  const storageKey = computed(() => `outless:probe-state:${groupId}`)
 
   /** Refresh nodes/groups after source sync jobs (import may add/remove nodes). */
   function refreshAfterSyncJob() {
@@ -57,11 +62,75 @@ export function useGroupSync(groupId: string) {
   const probeUnavailableStatuses = ref<Array<'healthy' | 'unhealthy' | 'unknown'>>([...DEFAULT_PROBE_STATUSES])
   const probeUnavailableMode = ref<ProbeMode>('normal')
   const probeUnavailableProbeURL = ref('')
+  const probeUnavailableActive = ref(0)
+  const probeUnavailableCompleted = ref(0)
+  const probeUnavailableRatePerSec = ref(0)
+  const probeUnavailableEtaSec = ref<number | null>(null)
   const syncedAt = ref('')
   const deletedUnavailableCount = ref(0)
   const isCancelled = ref(false)
   const syncingNodes = shallowRef<Map<string, SyncNodeStatus>>(new Map())
   const probingUnavailableNodes = shallowRef<Map<string, ProbeUnavailableNodeStatus>>(new Map())
+
+  // Restore state from localStorage on initialization
+  if (import.meta.client) {
+    const saved = localStorage.getItem(storageKey.value)
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        if (typeof parsed.isProbingUnavailable === 'boolean') isProbingUnavailable.value = parsed.isProbingUnavailable
+        if (typeof parsed.probeUnavailableTotal === 'number') probeUnavailableTotal.value = parsed.probeUnavailableTotal
+        if (typeof parsed.probeUnavailableProcessed === 'number') probeUnavailableProcessed.value = parsed.probeUnavailableProcessed
+        if (typeof parsed.probeUnavailableActive === 'number') probeUnavailableActive.value = parsed.probeUnavailableActive
+        if (typeof parsed.probeUnavailableCompleted === 'number') probeUnavailableCompleted.value = parsed.probeUnavailableCompleted
+        if (typeof parsed.probeUnavailableRatePerSec === 'number') probeUnavailableRatePerSec.value = parsed.probeUnavailableRatePerSec
+        if (parsed.probeUnavailableEtaSec !== null && typeof parsed.probeUnavailableEtaSec === 'number') probeUnavailableEtaSec.value = parsed.probeUnavailableEtaSec
+        if (Array.isArray(parsed.probeUnavailableStatuses)) probeUnavailableStatuses.value = normalizeProbeStatuses(parsed.probeUnavailableStatuses)
+        if (parsed.probeUnavailableMode === 'normal' || parsed.probeUnavailableMode === 'fast') probeUnavailableMode.value = parsed.probeUnavailableMode
+        if (typeof parsed.probeUnavailableProbeURL === 'string') probeUnavailableProbeURL.value = parsed.probeUnavailableProbeURL
+      } catch (err) {
+        /* ignore invalid localStorage payload */
+      }
+    }
+  }
+
+  // Watch for state changes to track progress and persist to localStorage
+  if (import.meta.client) {
+    watch(isProbingUnavailable, () => {
+      saveProbeStateToStorage()
+    })
+    watch([probeUnavailableTotal, probeUnavailableProcessed], () => {
+      saveProbeStateToStorage()
+    })
+    watch([probeUnavailableActive, probeUnavailableCompleted, probeUnavailableRatePerSec, probeUnavailableEtaSec], () => {
+      saveProbeStateToStorage()
+    })
+    watch([probeUnavailableStatuses, probeUnavailableMode, probeUnavailableProbeURL], () => {
+      saveProbeStateToStorage()
+    })
+  }
+
+  function saveProbeStateToStorage() {
+    if (!import.meta.client) return
+    const state = {
+      isProbingUnavailable: isProbingUnavailable.value,
+      probeUnavailableTotal: probeUnavailableTotal.value,
+      probeUnavailableProcessed: probeUnavailableProcessed.value,
+      probeUnavailableActive: probeUnavailableActive.value,
+      probeUnavailableCompleted: probeUnavailableCompleted.value,
+      probeUnavailableRatePerSec: probeUnavailableRatePerSec.value,
+      probeUnavailableEtaSec: probeUnavailableEtaSec.value,
+      probeUnavailableStatuses: probeUnavailableStatuses.value,
+      probeUnavailableMode: probeUnavailableMode.value,
+      probeUnavailableProbeURL: probeUnavailableProbeURL.value,
+    }
+    localStorage.setItem(storageKey.value, JSON.stringify(state))
+  }
+
+  function clearProbeStateFromStorage() {
+    if (!import.meta.client) return
+    localStorage.removeItem(storageKey.value)
+  }
 
   let unsubscribe: (() => void) | null = null
 
@@ -77,6 +146,66 @@ export function useGroupSync(groupId: string) {
     if (unsubscribe) {
       unsubscribe()
       unsubscribe = null
+    }
+  }
+
+  function requestProbeUnavailableStateWsOnly() {
+    ensureSubscribed()
+    sendAdminRealtime({ action: 'probe_unavailable_state', group_id: groupId })
+  }
+
+  function applyProbeUnavailableState(ev: GroupProbeUnavailableStateEvent) {
+    const remoteTotal = typeof ev.total === 'number' ? ev.total : 0
+    const remoteProcessed = typeof ev.processed === 'number' ? ev.processed : 0
+    const nodeCount = Array.isArray(ev.nodes) ? ev.nodes.length : 0
+    const looksLikeIdleSnapshot = !ev.running && remoteTotal === 0 && remoteProcessed === 0 && nodeCount === 0
+    if (
+      looksLikeIdleSnapshot
+      && isProbingUnavailable.value
+      && !isProbeStaleIdleIgnoreSuspended()
+    ) {
+      requestProbeUnavailableStateWsOnly()
+      return
+    }
+
+    isProbingUnavailable.value = ev.running
+    probeUnavailableTotal.value = ev.total
+    probeUnavailableProcessed.value = ev.processed
+    probeUnavailableError.value = ev.error ?? ''
+    probeUnavailableStatuses.value = normalizeProbeStatuses(ev.statuses ?? probeUnavailableStatuses.value)
+    probeUnavailableMode.value = normalizeProbeMode(ev.mode)
+    probeUnavailableProbeURL.value = typeof ev.probe_url === 'string' ? ev.probe_url : probeUnavailableProbeURL.value
+    probeUnavailableActive.value = typeof ev.active === 'number' ? ev.active : 0
+    probeUnavailableCompleted.value = typeof ev.completed === 'number' ? ev.completed : ev.processed
+    probeUnavailableRatePerSec.value = typeof ev.rate_per_sec === 'number' ? ev.rate_per_sec : 0
+    probeUnavailableEtaSec.value = typeof ev.eta_sec === 'number' && ev.eta_sec >= 0 ? ev.eta_sec : null
+    const next = new Map<string, ProbeUnavailableNodeStatus>()
+    for (const node of ev.nodes ?? []) {
+      next.set(node.node_id, {
+        node_id: node.node_id,
+        url: node.url,
+        status: node.status,
+        latency_ms: node.latency_ms,
+        node_status: node.node_status,
+        country: node.country,
+        error: node.error,
+      })
+    }
+    probingUnavailableNodes.value = next
+    if (!ev.running) {
+      maybeUnsubscribe()
+    }
+  }
+
+  async function pullProbeUnavailableStateFromHttp() {
+    if (!import.meta.client) return
+    const baseURL = runtimeConfig.public.apiBase as string
+    try {
+      const ev = await fetchGroupProbeUnavailableState(groupId, baseURL)
+      applyProbeUnavailableState(ev)
+    }
+    catch {
+      /* ignore */
     }
   }
 
@@ -99,35 +228,17 @@ export function useGroupSync(groupId: string) {
       probeUnavailableStatuses.value = normalizeProbeStatuses(Array.isArray(msg.statuses) ? msg.statuses : probeUnavailableStatuses.value)
       probeUnavailableMode.value = normalizeProbeMode(msg.mode)
       probeUnavailableProbeURL.value = typeof msg.probe_url === 'string' ? msg.probe_url : ''
+      probeUnavailableActive.value = typeof msg.active === 'number' ? msg.active : 0
+      probeUnavailableCompleted.value = typeof msg.completed === 'number' ? msg.completed : 0
+      probeUnavailableRatePerSec.value = typeof msg.rate_per_sec === 'number' ? msg.rate_per_sec : 0
+      probeUnavailableEtaSec.value = typeof msg.eta_sec === 'number' && msg.eta_sec >= 0 ? msg.eta_sec : null
       probingUnavailableNodes.value = new Map()
       return
     }
     if (t === 'probe_unavailable_state') {
       const ev = msg as unknown as GroupProbeUnavailableStateEvent & { group_id?: string }
       if (ev.group_id && ev.group_id !== groupId) return
-      isProbingUnavailable.value = ev.running
-      probeUnavailableTotal.value = ev.total
-      probeUnavailableProcessed.value = ev.processed
-      probeUnavailableError.value = ev.error ?? ''
-      probeUnavailableStatuses.value = normalizeProbeStatuses(ev.statuses ?? probeUnavailableStatuses.value)
-      probeUnavailableMode.value = normalizeProbeMode(ev.mode)
-      probeUnavailableProbeURL.value = typeof ev.probe_url === 'string' ? ev.probe_url : probeUnavailableProbeURL.value
-      const next = new Map<string, ProbeUnavailableNodeStatus>()
-      for (const node of ev.nodes ?? []) {
-        next.set(node.node_id, {
-          node_id: node.node_id,
-          url: node.url,
-          status: node.status,
-          latency_ms: node.latency_ms,
-          node_status: node.node_status,
-          country: node.country,
-          error: node.error,
-        })
-      }
-      probingUnavailableNodes.value = next
-      if (!ev.running) {
-        maybeUnsubscribe()
-      }
+      applyProbeUnavailableState(ev)
       return
     }
     if (t === 'probe_unavailable_node_status') {
@@ -146,7 +257,11 @@ export function useGroupSync(groupId: string) {
       probingUnavailableNodes.value = next
       if (typeof ev.total === 'number') probeUnavailableTotal.value = ev.total
       if (typeof ev.processed === 'number') probeUnavailableProcessed.value = ev.processed
-      patchNodeInAllNodeQueries(queryClient, {
+      if (typeof ev.active === 'number') probeUnavailableActive.value = ev.active
+      if (typeof ev.completed === 'number') probeUnavailableCompleted.value = ev.completed
+      if (typeof ev.rate_per_sec === 'number') probeUnavailableRatePerSec.value = ev.rate_per_sec
+      if (typeof ev.eta_sec === 'number') probeUnavailableEtaSec.value = ev.eta_sec >= 0 ? ev.eta_sec : null
+      schedulePatchNodeInAllNodeQueries(queryClient, {
         id: ev.node_id,
         status: ev.node_status,
         latency_ms: ev.latency_ms,
@@ -159,7 +274,12 @@ export function useGroupSync(groupId: string) {
       if (ev.group_id && ev.group_id !== groupId) return
       if (typeof ev.total === 'number') probeUnavailableTotal.value = ev.total
       if (typeof ev.processed === 'number') probeUnavailableProcessed.value = ev.processed
+      if (typeof ev.active === 'number') probeUnavailableActive.value = ev.active
+      if (typeof ev.completed === 'number') probeUnavailableCompleted.value = ev.completed
+      if (typeof ev.rate_per_sec === 'number') probeUnavailableRatePerSec.value = ev.rate_per_sec
+      if (typeof ev.eta_sec === 'number') probeUnavailableEtaSec.value = ev.eta_sec >= 0 ? ev.eta_sec : null
       isProbingUnavailable.value = false
+      clearProbeStateFromStorage()
       maybeUnsubscribe()
       return
     }
@@ -169,7 +289,12 @@ export function useGroupSync(groupId: string) {
       probeUnavailableError.value = errMsg
       probeUnavailableTotal.value = typeof msg.total === 'number' ? msg.total : probeUnavailableTotal.value
       probeUnavailableProcessed.value = typeof msg.processed === 'number' ? msg.processed : probeUnavailableProcessed.value
+      probeUnavailableActive.value = typeof msg.active === 'number' ? msg.active : probeUnavailableActive.value
+      probeUnavailableCompleted.value = typeof msg.completed === 'number' ? msg.completed : probeUnavailableCompleted.value
+      probeUnavailableRatePerSec.value = typeof msg.rate_per_sec === 'number' ? msg.rate_per_sec : probeUnavailableRatePerSec.value
+      probeUnavailableEtaSec.value = typeof msg.eta_sec === 'number' ? (msg.eta_sec >= 0 ? msg.eta_sec : null) : probeUnavailableEtaSec.value
       isProbingUnavailable.value = false
+      clearProbeStateFromStorage()
       maybeUnsubscribe()
       return
     }
@@ -177,7 +302,12 @@ export function useGroupSync(groupId: string) {
       if (msg.group_id && msg.group_id !== groupId) return
       probeUnavailableTotal.value = typeof msg.total === 'number' ? msg.total : probeUnavailableTotal.value
       probeUnavailableProcessed.value = typeof msg.processed === 'number' ? msg.processed : probeUnavailableProcessed.value
+      probeUnavailableActive.value = typeof msg.active === 'number' ? msg.active : probeUnavailableActive.value
+      probeUnavailableCompleted.value = typeof msg.completed === 'number' ? msg.completed : probeUnavailableCompleted.value
+      probeUnavailableRatePerSec.value = typeof msg.rate_per_sec === 'number' ? msg.rate_per_sec : probeUnavailableRatePerSec.value
+      probeUnavailableEtaSec.value = typeof msg.eta_sec === 'number' ? (msg.eta_sec >= 0 ? msg.eta_sec : null) : probeUnavailableEtaSec.value
       isProbingUnavailable.value = false
+      clearProbeStateFromStorage()
       maybeUnsubscribe()
       return
     }
@@ -282,6 +412,10 @@ export function useGroupSync(groupId: string) {
     probeUnavailableProcessed.value = 0
     probeUnavailableTotal.value = 0
     probingUnavailableNodes.value = new Map()
+    probeUnavailableActive.value = 0
+    probeUnavailableCompleted.value = 0
+    probeUnavailableRatePerSec.value = 0
+    probeUnavailableEtaSec.value = null
     probeUnavailableStatuses.value = normalizeProbeStatuses(options?.statuses ?? probeUnavailableStatuses.value)
     probeUnavailableMode.value = normalizeProbeMode(options?.mode)
     probeUnavailableProbeURL.value = (options?.probeURL ?? '').trim()
@@ -293,11 +427,16 @@ export function useGroupSync(groupId: string) {
       mode: probeUnavailableMode.value,
       probe_url: probeUnavailableProbeURL.value,
     })
+    if (import.meta.client) {
+      globalThis.setTimeout(() => {
+        requestProbeUnavailableState()
+      }, 300)
+    }
   }
 
   function requestProbeUnavailableState() {
-    ensureSubscribed()
-    sendAdminRealtime({ action: 'probe_unavailable_state', group_id: groupId })
+    requestProbeUnavailableStateWsOnly()
+    void pullProbeUnavailableStateFromHttp()
   }
 
   function requestSyncState() {
@@ -336,6 +475,10 @@ export function useGroupSync(groupId: string) {
     probeUnavailableError,
     probeUnavailableTotal,
     probeUnavailableProcessed,
+    probeUnavailableActive,
+    probeUnavailableCompleted,
+    probeUnavailableRatePerSec,
+    probeUnavailableEtaSec,
     probeUnavailableStatuses,
     probeUnavailableMode,
     probeUnavailableProbeURL,
