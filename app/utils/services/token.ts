@@ -5,6 +5,7 @@ import {
   type CreateToken,
   type IssuedToken,
   type Token,
+  type UpdateToken,
 } from '~/utils/schemas/token'
 import { getAuthHeaders } from '~/utils/services/auth-header'
 
@@ -46,6 +47,14 @@ export async function activateToken(id: string, baseURL: string): Promise<void> 
 export async function removeToken(id: string, baseURL: string): Promise<void> {
   await $fetch(`${baseURL}/v1/tokens/${id}`, {
     method: 'DELETE',
+    headers: getAuthHeaders(),
+  })
+}
+
+export async function updateToken(id: string, token: UpdateToken, baseURL: string): Promise<void> {
+  await $fetch(`${baseURL}/v1/tokens/${id}`, {
+    method: 'PUT',
+    body: token,
     headers: getAuthHeaders(),
   })
 }

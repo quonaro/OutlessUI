@@ -17,12 +17,19 @@ export const CreateTokenSchema = z.object({
   expires_in: z.string().min(1),
 })
 
+export const UpdateTokenSchema = z.object({
+  owner: z.string().min(1),
+  group_ids: z.array(z.string()).optional().default([]),
+  expires_in: z.string().min(1),
+})
+
 export const IssuedTokenSchema = TokenSchema.extend({
   token: z.string(),
 })
 
 export type Token = z.infer<typeof TokenSchema>
 export type CreateToken = z.infer<typeof CreateTokenSchema>
+export type UpdateToken = z.infer<typeof UpdateTokenSchema>
 export type IssuedToken = z.infer<typeof IssuedTokenSchema>
 
 // ExpiresInOption lists predefined durations shown in the UI.

@@ -8,6 +8,7 @@ import { useCreateToken } from '~/composables/tokens/useCreateToken'
 import { useDeleteToken } from '~/composables/tokens/useDeleteToken'
 import { useRemoveToken } from '~/composables/tokens/useRemoveToken'
 import { useActivateToken } from '~/composables/tokens/useActivateToken'
+import { useUpdateToken } from '~/composables/tokens/useUpdateToken'
 import { useGroups } from '~/composables/groups/useGroups'
 import UiButton from '~/components/ui/button/button.vue'
 import UiInput from '~/components/ui/input/input.vue'
@@ -28,6 +29,7 @@ const { data: groups } = useGroups()
 const showCreateDialog = ref(false)
 const showIssuedDialog = ref(false)
 const showAccessURLDialog = ref(false)
+const showEditDialog = ref(false)
 const issuedToken = ref<IssuedToken | null>(null)
 const selectedAccessURL = ref('')
 const issuedAccessURL = ref('')
@@ -35,10 +37,16 @@ const isIssueSubmitting = ref(false)
 const pendingDeactivateId = ref('')
 const pendingActivateId = ref('')
 const pendingRemoveId = ref('')
+const editingTokenId = ref('')
+const isEditSubmitting = ref(false)
 
 const ownerInput = ref('')
 const groupIdsInput = ref<string[]>([])
 const expiresInInput = ref(defaultExpiresIn)
+
+const editOwnerInput = ref('')
+const editGroupIdsInput = ref<string[]>([])
+const editExpiresInInput = ref(defaultExpiresIn)
 
 const invalidate = () => queryClient.invalidateQueries({ queryKey: ['tokens'] })
 
@@ -60,6 +68,9 @@ const activateMutation = useActivateToken({
   onSuccess: invalidate,
 })
 const removeMutation = useRemoveToken({
+  onSuccess: invalidate,
+})
+const updateMutation = useUpdateToken({
   onSuccess: invalidate,
 })
 
@@ -203,6 +214,56 @@ function handleGroupCheckboxChange(groupID: string, event: Event) {
   if (!target) return
   toggleGroupSelection(groupID, target.checked)
 }
+
+function openEditDialog(token: Token) {
+  updateMutation.reset()
+  editingTokenId.value = token.id
+  editOwnerInput.value = token.owner
+  editGroupIdsInput.value = token.group_ids?.length ? token.group_ids : (token.group_id ? [token.group_id] : [])
+  editExpiresInInput.value = defaultExpiresIn
+  isEditSubmitting.value = false
+  showEditDialog.value = true
+}
+
+function closeEditDialog() {
+  updateMutation.reset()
+  showEditDialog.value = false
+  editingTokenId.value = ''
+  editOwnerInput.value = ''
+  editGroupIdsInput.value = []
+  editExpiresInInput.value = defaultExpiresIn
+  isEditSubmitting.value = false
+}
+
+function handleEdit() {
+  if (!editOwnerInput.value.trim() || !editExpiresInInput.value || isEditSubmitting.value || !editingTokenId.value) return
+  const payload = {
+    owner: editOwnerInput.value.trim(),
+    group_ids: editGroupIdsInput.value,
+    expires_in: editExpiresInInput.value,
+  }
+  isEditSubmitting.value = true
+  updateMutation.mutate({ id: editingTokenId.value, token: payload }, {
+    onSettled: () => {
+      isEditSubmitting.value = false
+      closeEditDialog()
+    },
+  })
+}
+
+function toggleEditGroupSelection(groupID: string, checked: boolean) {
+  if (checked) {
+    editGroupIdsInput.value = [...editGroupIdsInput.value.filter((id) => id !== groupID), groupID]
+    return
+  }
+  editGroupIdsInput.value = editGroupIdsInput.value.filter((id) => id !== groupID)
+}
+
+function handleEditGroupCheckboxChange(groupID: string, event: Event) {
+  const target = event.target as HTMLInputElement | null
+  if (!target) return
+  toggleEditGroupSelection(groupID, target.checked)
+}
 </script>
 
 <template>
@@ -250,6 +311,13 @@ function handleGroupCheckboxChange(groupID: string, event: Event) {
               @click="viewAccessURL(token)"
             >
               View URL
+            </UiButton>
+            <UiButton
+              variant="outline"
+              size="sm"
+              @click="openEditDialog(token)"
+            >
+              Edit
             </UiButton>
             <UiButton
               v-if="token.is_active"
@@ -350,6 +418,78 @@ function handleGroupCheckboxChange(groupID: string, event: Event) {
             @click="handleCreate"
           >
             {{ isIssueSubmitting ? 'Issuing...' : 'Issue' }}
+          </UiButton>
+        </CardFooter>
+      </UiCard>
+    </div>
+
+    <div
+      v-if="showEditDialog"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+    >
+      <UiCard class="w-full max-w-md p-6">
+        <CardHeader>
+          <CardTitle>Edit Token</CardTitle>
+        </CardHeader>
+        <CardContent class="space-y-4">
+          <div class="space-y-2">
+            <label class="text-sm font-medium">Owner</label>
+            <UiInput
+              v-model="editOwnerInput"
+              placeholder="user@example.com"
+              @keyup.enter="handleEdit"
+            />
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium">Group Access</label>
+            <div class="max-h-40 space-y-2 overflow-auto rounded-md border p-2">
+              <label class="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  :checked="editGroupIdsInput.length === 0"
+                  @change="editGroupIdsInput = []"
+                >
+                <span>All groups</span>
+              </label>
+              <label
+                v-for="g in groups ?? []"
+                :key="g.id"
+                class="flex items-center gap-2 text-sm"
+              >
+                <input
+                  type="checkbox"
+                  :checked="editGroupIdsInput.includes(g.id)"
+                  @change="handleEditGroupCheckboxChange(g.id, $event)"
+                >
+                <span>{{ g.name }}</span>
+              </label>
+            </div>
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium">Expires in</label>
+            <select
+              v-model="editExpiresInInput"
+              class="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            >
+              <option
+                v-for="opt in EXPIRES_IN_OPTIONS"
+                :key="opt.value"
+                :value="opt.value"
+              >
+                {{ opt.label }}
+              </option>
+            </select>
+          </div>
+        </CardContent>
+        <CardFooter class="flex justify-end gap-2">
+          <UiButton variant="outline" @click="closeEditDialog">
+            Cancel
+          </UiButton>
+          <UiButton
+            :disabled="!editOwnerInput.trim() || isEditSubmitting"
+            @click="handleEdit"
+          >
+            {{ isEditSubmitting ? 'Updating...' : 'Update' }}
           </UiButton>
         </CardFooter>
       </UiCard>
