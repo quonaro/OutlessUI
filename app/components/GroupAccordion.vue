@@ -25,8 +25,6 @@ const emit = defineEmits<{
   addNode: [groupId: string]
   moveNode: [payload: { node: Node, targetGroupId: string }]
   toggleSelection: [nodeId: string]
-  bulkMove: [targetGroupId: string]
-  bulkDelete: []
   duplicateNode: [node: Node]
 }>()
 
@@ -349,8 +347,6 @@ onBeforeUnmount(() => {
       @add-node="handleAddNode"
       @move-node="handleMoveNode"
       @toggle-selection="emit('toggleSelection', $event)"
-      @bulk-move="emit('bulkMove', $event)"
-      @bulk-delete="emit('bulkDelete')"
       @duplicate-node="emit('duplicateNode', $event)"
       :moving-ids="movingNodeIDs"
       :selected-ids="props.selectedNodeIds"

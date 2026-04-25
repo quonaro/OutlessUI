@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
+import { Plus, Server } from 'lucide-vue-next'
 import UiPageLayout from '~/components/ui/page-layout/page-layout.vue'
 import UiButton from '~/components/ui/button/button.vue'
 import UiInput from '~/components/ui/input/input.vue'
@@ -94,6 +95,8 @@ const nodeProbeTarget = ref<Node | null>(null)
 const nodeProbeModeSelection = ref<'normal' | 'fast'>('normal')
 const nodeProbeURLSelection = ref('')
 const singleNodeProbeFormStorageKey = 'outless:nodes:single-probe-form'
+const bulkMoveDialogOpen = ref(false)
+const bulkMoveTargetGroupId = ref('')
 
 const createGroupMutation = useMutation({
   mutationFn: (payload: { name: string; source_url: string; random_enabled: boolean; random_limit: number | null }) => createGroup({ ...payload, auto_delete_unavailable: false }, baseURL),
@@ -310,19 +313,26 @@ function handleToggleSelection(nodeId: string) {
   selectedNodeIDs.value = next
 }
 
-function handleBulkMove(targetGroupId: string) {
+function openBulkMoveDialog() {
+  bulkMoveTargetGroupId.value = ''
+  bulkMoveDialogOpen.value = true
+}
+
+function handleBulkMove() {
   const promises = Array.from(selectedNodeIDs.value).map(nodeId =>
-    updateNode(nodeId, { url: '', group_id: targetGroupId }, baseURL)
+    updateNode(nodeId, { url: '', group_id: bulkMoveTargetGroupId.value }, baseURL)
   )
   Promise.all(promises)
     .then(() => {
       queryClient.invalidateQueries({ queryKey: ['nodes'] })
       queryClient.invalidateQueries({ queryKey: ['groups'] })
       selectedNodeIDs.value = new Set()
+      bulkMoveDialogOpen.value = false
     })
 }
 
 function handleBulkDelete() {
+  if (!confirm(`Delete ${selectedNodeIDs.value.size} selected nodes?`)) return
   const promises = Array.from(selectedNodeIDs.value).map(nodeId => deleteNode(nodeId, baseURL))
   Promise.all(promises)
     .then(() => {
@@ -493,9 +503,27 @@ watch([nodeProbeModeSelection, nodeProbeURLSelection], ([mode, probeURL]) => {
             <UiButton variant="outline" @click="viewMode = 'grouped'">Grouped</UiButton>
             <UiButton variant="outline" @click="viewMode = 'flat'">Flat</UiButton>
           </div>
-          <div class="flex flex-wrap items-center gap-2">
-            <UiButton @click="showCreateGroupDialog = true">Create Group</UiButton>
-            <UiButton @click="showCreateNodeDialog = true">Create Node</UiButton>
+          <div v-if="selectedNodeIDs.size > 0" class="flex items-center gap-2">
+            <span class="text-sm font-medium">{{ selectedNodeIDs.size }} selected</span>
+            <UiButton size="sm" variant="outline" @click="openBulkMoveDialog">
+              Move
+            </UiButton>
+            <UiButton size="sm" variant="destructive" @click="handleBulkDelete">
+              Delete
+            </UiButton>
+            <UiButton size="sm" variant="ghost" @click="selectedNodeIDs = new Set()">
+              Clear
+            </UiButton>
+          </div>
+          <div v-else class="flex flex-wrap items-center gap-2">
+            <UiButton @click="showCreateGroupDialog = true">
+              <Plus class="h-4 w-4 mr-2" />
+              Create Group
+            </UiButton>
+            <UiButton @click="showCreateNodeDialog = true">
+              <Server class="h-4 w-4 mr-2" />
+              Create Node
+            </UiButton>
           </div>
         </div>
         <div class="rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
@@ -548,8 +576,6 @@ watch([nodeProbeModeSelection, nodeProbeURLSelection], ([mode, probeURL]) => {
           @add-node="handleAddNode"
           @move-node="handleMoveNode"
           @toggle-selection="handleToggleSelection"
-          @bulk-move="handleBulkMove"
-          @bulk-delete="handleBulkDelete"
           @duplicate-node="handleDuplicateNode"
         />
 
@@ -759,6 +785,30 @@ watch([nodeProbeModeSelection, nodeProbeURLSelection], ([mode, probeURL]) => {
           <CardFooter class="flex justify-end gap-2">
             <UiButton variant="outline" @click="nodeProbeFormOpen = false">Cancel</UiButton>
             <UiButton :disabled="!nodeProbeTarget" @click="confirmNodeProbeStart">Check!</UiButton>
+          </CardFooter>
+        </UiCard>
+      </div>
+
+      <div v-if="bulkMoveDialogOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <UiCard class="w-full max-w-md p-6">
+          <CardHeader><CardTitle>Move selected nodes</CardTitle></CardHeader>
+          <CardContent class="space-y-4">
+            <p class="text-sm text-muted-foreground">Move {{ selectedNodeIDs.size }} selected nodes to another group.</p>
+            <div class="space-y-2">
+              <label class="text-sm font-medium" for="bulk-move-target-group">Target group</label>
+              <select
+                id="bulk-move-target-group"
+                v-model="bulkMoveTargetGroupId"
+                class="w-full rounded-md border bg-background px-3 py-2 text-sm"
+              >
+                <option value="">No group</option>
+                <option v-for="group in groups ?? []" :key="group.id" :value="group.id">{{ group.name }}</option>
+              </select>
+            </div>
+          </CardContent>
+          <CardFooter class="flex justify-end gap-2">
+            <UiButton variant="outline" @click="bulkMoveDialogOpen = false">Cancel</UiButton>
+            <UiButton :disabled="!bulkMoveTargetGroupId" @click="handleBulkMove">Move</UiButton>
           </CardFooter>
         </UiCard>
       </div>

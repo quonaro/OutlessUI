@@ -101,7 +101,7 @@ export async function fetchNodeByID(id: string, baseURL: string): Promise<Node> 
 
 export async function updateNode(id: string, node: UpdateNode, baseURL: string): Promise<void> {
   await $fetch(`${baseURL}/v1/nodes/${id}`, {
-    method: 'PUT',
+    method: 'PATCH',
     body: node,
     headers: getAuthHeaders(),
   })

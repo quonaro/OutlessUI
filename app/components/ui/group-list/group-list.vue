@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
+import { Plus } from 'lucide-vue-next'
 import type { Group, CreateGroup, UpdateGroup } from '~/utils/schemas/group'
 import { fetchGroups, createGroup, updateGroup, deleteGroup } from '~/utils/services/group'
 import UiButton from '~/components/ui/button/button.vue'
@@ -59,7 +60,7 @@ function handleCreateGroup() {
   if (!groupName.value.trim() || isCreateSubmitting.value) return
   isCreateSubmitting.value = true
   createMutation.mutate(
-    { name: groupName.value, source_url: groupSourceURL.value.trim(), auto_delete_unavailable: false },
+    { name: groupName.value, source_url: groupSourceURL.value.trim(), auto_delete_unavailable: false, random_enabled: false },
     {
       onSettled: () => {
         isCreateSubmitting.value = false
@@ -78,6 +79,7 @@ function handleEditGroup() {
         name: groupName.value,
         source_url: groupSourceURL.value.trim(),
         auto_delete_unavailable: selectedGroup.value.auto_delete_unavailable ?? false,
+        random_enabled: selectedGroup.value.random_enabled ?? false,
       },
     },
     {
@@ -131,6 +133,7 @@ function closeEditDialog() {
   <div class="space-y-4">
     <div class="flex justify-end items-center">
       <UiButton @click="openCreateDialog">
+        <Plus class="h-4 w-4 mr-2" />
         Create Group
       </UiButton>
     </div>

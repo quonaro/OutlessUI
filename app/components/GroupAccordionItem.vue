@@ -465,24 +465,6 @@ function handleDuplicateNode() {
   moveNodeTarget.value = null
   moveTargetGroupId.value = ''
 }
-function openBulkMoveDialog() {
-  bulkMoveTargetGroupId.value = ''
-  bulkMoveDialogOpen.value = true
-}
-function confirmBulkMove() {
-  emit('bulkMove', bulkMoveTargetGroupId.value)
-  bulkMoveDialogOpen.value = false
-  bulkMoveTargetGroupId.value = ''
-}
-function handleBulkDuplicate() {
-  emit('bulkMove', '')
-  bulkMoveDialogOpen.value = false
-  bulkMoveTargetGroupId.value = ''
-}
-function handleBulkDelete() {
-  if (!confirm(`Delete ${props.selectedIds.size} selected nodes?`)) return
-  emit('bulkDelete')
-}
 </script>
 
 <template>
@@ -529,13 +511,24 @@ function handleBulkDelete() {
                 <Pencil class="mr-2 h-4 w-4" />
                 Edit
               </DropdownMenuItem>
+              <DropdownMenuItem @click.prevent="emit('toggleAutoDelete', !props.group.auto_delete_unavailable)" :disabled="props.togglingAutoDelete">
+                <span class="mr-2 h-4 w-4 flex items-center justify-center">
+                  <span v-if="props.group.auto_delete_unavailable" class="h-3 w-3 rounded-full bg-emerald-500"></span>
+                  <span v-else class="h-3 w-3 rounded-full border border-gray-400"></span>
+                </span>
+                Auto-delete unavailable
+              </DropdownMenuItem>
               <DropdownMenuItem @click.prevent="emit('deleteUnavailable')" :disabled="props.cleanupPending">
                 <Trash2 class="mr-2 h-4 w-4" />
                 Delete unavailable
               </DropdownMenuItem>
-              <DropdownMenuItem @click.prevent="handleProbeButtonClick" :disabled="(!props.canProbeUnavailable && !props.probeUnavailablePending) || props.isSyncing">
+              <DropdownMenuItem v-if="!props.probeUnavailablePending" @click.prevent="handleProbeButtonClick" :disabled="(!props.canProbeUnavailable && !props.probeUnavailablePending) || props.isSyncing">
                 <RefreshCw class="mr-2 h-4 w-4" />
                 Check all
+              </DropdownMenuItem>
+              <DropdownMenuItem v-else @click.prevent="emit('cancelSync')">
+                <X class="mr-2 h-4 w-4" />
+                Cancel
               </DropdownMenuItem>
               <DropdownMenuItem class="text-destructive focus:text-destructive" @click.prevent="openDeleteDialog" :disabled="props.deletingGroup">
                 <Trash2 class="mr-2 h-4 w-4" />
@@ -546,32 +539,6 @@ function handleBulkDelete() {
         </div>
       </div>
     </summary>
-    <div class="flex items-center justify-end border-b border-border/80 bg-muted/25 px-4 py-2">
-      <div v-if="props.selectedIds.size > 0" class="flex items-center gap-2">
-        <span class="text-xs text-muted-foreground">{{ props.selectedIds.size }} selected</span>
-        <UiButton size="sm" variant="outline" @click="openBulkMoveDialog">
-          Move
-        </UiButton>
-        <UiButton size="sm" variant="destructive" @click="handleBulkDelete">
-          Delete
-        </UiButton>
-      </div>
-      <div v-else class="flex items-center gap-2">
-        <label class="flex items-center gap-1 text-xs text-muted-foreground" :for="`auto-delete-${props.group.id}`">
-          <input
-            :id="`auto-delete-${props.group.id}`"
-            :name="`auto-delete-${props.group.id}`"
-            type="checkbox"
-            :checked="props.group.auto_delete_unavailable"
-            :disabled="props.togglingAutoDelete"
-            @change="emit('toggleAutoDelete', ($event.target as HTMLInputElement).checked)"
-          >
-          Auto-delete unavailable
-        </label>
-        <UiButton v-if="props.isSyncing || props.probeUnavailablePending" size="sm" variant="outline" @click.prevent="emit('cancelSync')">Cancel</UiButton>
-      </div>
-    </div>
-
     <div
       v-if="props.isSyncing || props.syncInterrupted"
       class="flex items-center gap-2 border-b border-border/80 bg-muted/40 px-4 py-2.5"
@@ -615,21 +582,19 @@ function handleBulkDelete() {
           >
             <CardContent class="p-0">
               <div class="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  :checked="props.selectedIds.has(node.id)"
+                  @change="emit('toggleSelection', node.id)"
+                  class="h-4 w-4 rounded border-gray-400 shrink-0"
+                >
                 <div class="min-w-0 flex-1">
-                  <div class="group relative min-w-0 flex items-start gap-2">
-                    <input
-                      type="checkbox"
-                      :checked="props.selectedIds.has(node.id)"
-                      @change="emit('toggleSelection', node.id)"
-                      class="mt-1 h-4 w-4 rounded border-input"
+                  <div class="group relative min-w-0">
+                    <p class="truncate text-sm font-medium">{{ node.url }}</p>
+                    <div
+                      class="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden max-h-48 w-[min(90vw,40rem)] overflow-y-auto whitespace-pre-wrap break-all rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md group-hover:block"
                     >
-                    <div class="min-w-0 flex-1">
-                      <p class="truncate text-sm font-medium">{{ node.url }}</p>
-                      <div
-                        class="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden max-h-48 w-[min(90vw,40rem)] overflow-y-auto whitespace-pre-wrap break-all rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md group-hover:block"
-                      >
-                        {{ node.url }}
-                      </div>
+                      {{ node.url }}
                     </div>
                   </div>
                   <p class="text-xs text-muted-foreground">
@@ -933,29 +898,6 @@ function handleBulkDelete() {
         <UiButton variant="outline" @click="handleDuplicateNode">Duplicate</UiButton>
         <UiButton variant="outline" @click="moveNodeDialogOpen = false">Cancel</UiButton>
         <UiButton @click="confirmMoveNode">Move</UiButton>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
-
-  <Dialog :open="bulkMoveDialogOpen" @update:open="bulkMoveDialogOpen = $event">
-    <DialogContent>
-      <DialogHeader>
-        <DialogTitle>Move selected nodes</DialogTitle>
-        <DialogDescription>
-          Select target group to move {{ props.selectedIds.size }} selected nodes.
-        </DialogDescription>
-      </DialogHeader>
-      <div class="py-4">
-        <UiLabel for="bulk-move-target-group">Target group</UiLabel>
-        <select id="bulk-move-target-group" v-model="bulkMoveTargetGroupId" class="mt-1.5 w-full rounded-md border bg-background px-3 py-2 text-sm">
-          <option value="">No group</option>
-          <option v-for="g in props.allGroups" :key="g.id" :value="g.id">{{ g.name }}</option>
-        </select>
-      </div>
-      <DialogFooter>
-        <UiButton variant="outline" @click="handleBulkDuplicate">Duplicate</UiButton>
-        <UiButton variant="outline" @click="bulkMoveDialogOpen = false">Cancel</UiButton>
-        <UiButton @click="confirmBulkMove">Move</UiButton>
       </DialogFooter>
     </DialogContent>
   </Dialog>
