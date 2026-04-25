@@ -1,9 +1,6 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 // @ts-ignore
-const backendUrl = process.env.BACKEND_URL
-if (!backendUrl) {
-  throw new Error('BACKEND_URL is required to start frontend')
-}
+const backendUrl = process.env.BACKEND_URL || process.env.NUXT_PUBLIC_API_BASE || 'http://localhost:41220'
 
 export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
