@@ -656,7 +656,7 @@ function handleDuplicateNode() {
                         <Copy class="mr-2 h-3.5 w-3.5" />
                         Copy
                       </DropdownMenuItem>
-                      <DropdownMenuItem @click.prevent="emit('retryNode', { node, mode: 'normal' })" :disabled="props.probingIds.has(node.id)">
+                      <DropdownMenuItem @click.prevent="openNodeProbeForm(node)" :disabled="props.probingIds.has(node.id)">
                         <RefreshCw class="mr-2 h-3.5 w-3.5" />
                         {{ node.status === 'unknown' ? 'Check' : 'Retry' }}
                       </DropdownMenuItem>
