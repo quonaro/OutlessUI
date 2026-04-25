@@ -101,6 +101,7 @@ const editDialogOpen = ref(false)
 const deleteDialogOpen = ref(false)
 const editName = ref('')
 const editSourceUrl = ref('')
+const canSaveEdit = computed(() => editName.value.trim().length > 0 && !props.editingGroup)
 
 const accordionStorageKey = computed(() => `outless:nodes:group-accordion:${props.group.id}`)
 const groupProbeFormStorageKey = computed(() => `outless:nodes:group-probe-form:${props.group.id}`)
@@ -416,7 +417,7 @@ function confirmEdit() {
   emit('editGroup', {
     id: props.group.id,
     name: editName.value.trim(),
-    source_url: editSourceUrl.value.trim(),
+    source_url: editSourceUrl.value?.trim() || '',
   })
   editDialogOpen.value = false
 }
@@ -845,7 +846,7 @@ function confirmDelete() {
       </div>
       <DialogFooter>
         <UiButton variant="outline" @click="editDialogOpen = false">Cancel</UiButton>
-        <UiButton @click="confirmEdit" :disabled="!editName.value?.trim() || props.editingGroup">
+        <UiButton @click="confirmEdit" :disabled="!canSaveEdit">
           {{ props.editingGroup ? 'Saving...' : 'Save' }}
         </UiButton>
       </DialogFooter>
