@@ -25,7 +25,7 @@ import {
 } from '~/components/ui/dialog'
 import UiInput from '~/components/ui/input/input.vue'
 import UiLabel from '~/components/ui/label/label.vue'
-import { MoreHorizontal, Pencil, Trash2 } from 'lucide-vue-next'
+import { ArrowRight, Copy, MoreHorizontal, Plus, Pencil, RefreshCw, Trash2 } from 'lucide-vue-next'
 
 type PingFilter = 'all' | 'good' | 'ok' | 'bad'
 type StatusFilter = 'all' | 'healthy' | 'unhealthy' | 'unknown'
@@ -36,7 +36,6 @@ const props = withDefaults(defineProps<{
   search: string
   statusFilter: StatusFilter
   pingFilter: PingFilter
-  countryFilter: string
   metrics: GroupStatusCounts
   isSyncing: boolean
   isCancelled: boolean
@@ -63,6 +62,9 @@ const props = withDefaults(defineProps<{
   canProbeUnavailable: boolean
   deletingIds: Set<string>
   probingIds: Set<string>
+  movingIds: Set<string>
+  selectedIds: Set<string>
+  allGroups: Group[]
   localHealthy: boolean
   localUnhealthy: boolean
   localUnknown: boolean
@@ -70,7 +72,7 @@ const props = withDefaults(defineProps<{
   probeNodeState: (nodeId: string) => ProbeUnavailableNodeStatus | null
   editingGroup: boolean
   deletingGroup: boolean
-}>(), {})
+}>(), { allGroups: () => [] })
 
 const emit = defineEmits<{
   toggleLocalStatus: [status: NodeStatus, ev: Event]
@@ -82,8 +84,14 @@ const emit = defineEmits<{
   deleteUnavailable: []
   removeNode: [node: Node]
   retryNode: [payload: { node: Node, mode: 'normal' | 'fast', probeURL?: string }]
-  editGroup: [group: { id: string, name: string, source_url: string }]
+  editGroup: [group: { id: string, name: string, source_url: string, random_enabled: boolean, random_limit: number | null }]
   deleteGroup: [groupId: string]
+  addNode: [groupId: string]
+  moveNode: [payload: { node: Node, targetGroupId: string }]
+  toggleSelection: [nodeId: string]
+  bulkMove: [targetGroupId: string]
+  bulkDelete: []
+  duplicateNode: [node: Node]
 }>()
 
 const copiedNodeIDs = ref<Set<string>>(new Set())
@@ -96,11 +104,18 @@ const nodeProbeFormOpen = ref(false)
 const nodeProbeTarget = ref<Node | null>(null)
 const nodeProbeModeSelection = ref<'normal' | 'fast'>('normal')
 const nodeProbeURLSelection = ref('')
+const moveNodeDialogOpen = ref(false)
+const moveNodeTarget = ref<Node | null>(null)
+const moveTargetGroupId = ref('')
+const bulkMoveDialogOpen = ref(false)
+const bulkMoveTargetGroupId = ref('')
 const accordionOpen = ref(false)
 const editDialogOpen = ref(false)
 const deleteDialogOpen = ref(false)
 const editName = ref('')
 const editSourceUrl = ref('')
+const editRandomEnabled = ref(false)
+const editRandomLimit = ref<string>('')
 const canSaveEdit = computed(() => editName.value.trim().length > 0 && !props.editingGroup)
 
 const accordionStorageKey = computed(() => `outless:nodes:group-accordion:${props.group.id}`)
@@ -185,11 +200,6 @@ const displayNodes = computed(() => {
     )
   }
   list = list.filter((n) => matchesPingFilter(n.latency_ms, props.pingFilter))
-  const want = props.countryFilter.trim()
-  if (want) {
-    const t = normalizeCountryCode(want)
-    list = list.filter((n) => normalizeCountryCode(n.country) === t)
-  }
   const ls = localStatusSelection.value
   if (ls.length > 0) {
     list = list.filter((n) => ls.includes(n.status))
@@ -410,6 +420,8 @@ function formatEta(etaSec: number | null): string {
 function openEditDialog() {
   editName.value = props.group.name
   editSourceUrl.value = props.group.source_url ?? ''
+  editRandomEnabled.value = props.group.random_enabled ?? false
+  editRandomLimit.value = props.group.random_limit?.toString() ?? ''
   editDialogOpen.value = true
 }
 
@@ -418,6 +430,8 @@ function confirmEdit() {
     id: props.group.id,
     name: editName.value.trim(),
     source_url: editSourceUrl.value?.trim() || '',
+    random_enabled: editRandomEnabled.value,
+    random_limit: editRandomLimit.value ? parseInt(editRandomLimit.value) : null,
   })
   editDialogOpen.value = false
 }
@@ -430,6 +444,45 @@ function confirmDelete() {
   emit('deleteGroup', props.group.id)
   deleteDialogOpen.value = false
 }
+
+function openMoveNodeDialog(node: Node) {
+  moveNodeTarget.value = node
+  moveTargetGroupId.value = node.group_id ?? ''
+  moveNodeDialogOpen.value = true
+}
+
+function confirmMoveNode() {
+  if (!moveNodeTarget.value) return
+  emit('moveNode', { node: moveNodeTarget.value, targetGroupId: moveTargetGroupId.value })
+  moveNodeDialogOpen.value = false
+  moveNodeTarget.value = null
+  moveTargetGroupId.value = ''
+}
+function handleDuplicateNode() {
+  if (!moveNodeTarget.value) return
+  emit('duplicateNode', moveNodeTarget.value)
+  moveNodeDialogOpen.value = false
+  moveNodeTarget.value = null
+  moveTargetGroupId.value = ''
+}
+function openBulkMoveDialog() {
+  bulkMoveTargetGroupId.value = ''
+  bulkMoveDialogOpen.value = true
+}
+function confirmBulkMove() {
+  emit('bulkMove', bulkMoveTargetGroupId.value)
+  bulkMoveDialogOpen.value = false
+  bulkMoveTargetGroupId.value = ''
+}
+function handleBulkDuplicate() {
+  emit('bulkMove', '')
+  bulkMoveDialogOpen.value = false
+  bulkMoveTargetGroupId.value = ''
+}
+function handleBulkDelete() {
+  if (!confirm(`Delete ${props.selectedIds.size} selected nodes?`)) return
+  emit('bulkDelete')
+}
 </script>
 
 <template>
@@ -440,124 +493,98 @@ function confirmDelete() {
           <p class="truncate font-medium">
             {{ props.group.name }} <span class="text-muted-foreground">({{ props.group.total_nodes }})</span>
           </p>
-          <p class="truncate text-xs text-muted-foreground">
-            {{ props.group.source_url || 'Manual group' }}
-            <span v-if="props.group.last_synced_at"> · Last sync: {{ new Date(props.group.last_synced_at).toLocaleString() }}</span>
-          </p>
+          <div class="flex items-center gap-2 text-xs text-muted-foreground">
+            <p class="truncate min-w-0">
+              {{ props.group.source_url || 'Manual group' }}
+            </p>
+            <span class="flex items-center gap-2 shrink-0">
+              <span class="flex items-center gap-1">
+                <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+                {{ props.metrics.healthy }}
+              </span>
+              <span class="flex items-center gap-1">
+                <span class="h-2 w-2 rounded-full bg-red-500"></span>
+                {{ props.metrics.unhealthy }}
+              </span>
+              <span class="flex items-center gap-1">
+                <span class="h-2 w-2 rounded-full bg-amber-500"></span>
+                {{ props.metrics.unknown }}
+              </span>
+            </span>
+            <span v-if="props.group.last_synced_at" class="shrink-0"> · Last sync: {{ new Date(props.group.last_synced_at).toLocaleString() }}</span>
+          </div>
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger as-child>
-            <UiButton variant="ghost" size="icon" class="h-8 w-8" @click.prevent>
-              <MoreHorizontal class="h-4 w-4" />
-            </UiButton>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem @click.prevent="openEditDialog" :disabled="props.editingGroup">
-              <Pencil class="mr-2 h-4 w-4" />
-              Edit
-            </DropdownMenuItem>
-            <DropdownMenuItem class="text-destructive focus:text-destructive" @click.prevent="openDeleteDialog" :disabled="props.deletingGroup">
-              <Trash2 class="mr-2 h-4 w-4" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div class="flex shrink-0 items-center gap-1">
+          <UiButton variant="ghost" size="icon" class="h-8 w-8" @click.prevent="emit('addNode', props.group.id)">
+            <Plus class="h-4 w-4" />
+          </UiButton>
+          <DropdownMenu>
+            <DropdownMenuTrigger as-child>
+              <UiButton variant="ghost" size="icon" class="h-8 w-8" @click.prevent>
+                <MoreHorizontal class="h-4 w-4" />
+              </UiButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem @click.prevent="openEditDialog" :disabled="props.editingGroup">
+                <Pencil class="mr-2 h-4 w-4" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem @click.prevent="emit('deleteUnavailable')" :disabled="props.cleanupPending">
+                <Trash2 class="mr-2 h-4 w-4" />
+                Delete unavailable
+              </DropdownMenuItem>
+              <DropdownMenuItem @click.prevent="handleProbeButtonClick" :disabled="(!props.canProbeUnavailable && !props.probeUnavailablePending) || props.isSyncing">
+                <RefreshCw class="mr-2 h-4 w-4" />
+                Check all
+              </DropdownMenuItem>
+              <DropdownMenuItem class="text-destructive focus:text-destructive" @click.prevent="openDeleteDialog" :disabled="props.deletingGroup">
+                <Trash2 class="mr-2 h-4 w-4" />
+                Delete group
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
     </summary>
     <div class="flex items-center justify-end border-b border-border/80 bg-muted/25 px-4 py-2">
-      <label class="flex items-center gap-1 text-xs text-muted-foreground" :for="`auto-delete-${props.group.id}`">
-        <input
-          :id="`auto-delete-${props.group.id}`"
-          :name="`auto-delete-${props.group.id}`"
-          type="checkbox"
-          :checked="props.group.auto_delete_unavailable"
-          :disabled="props.togglingAutoDelete"
-          @change="emit('toggleAutoDelete', ($event.target as HTMLInputElement).checked)"
-        >
-        Auto-delete unavailable
-      </label>
+      <div v-if="props.selectedIds.size > 0" class="flex items-center gap-2">
+        <span class="text-xs text-muted-foreground">{{ props.selectedIds.size }} selected</span>
+        <UiButton size="sm" variant="outline" @click="openBulkMoveDialog">
+          Move
+        </UiButton>
+        <UiButton size="sm" variant="destructive" @click="handleBulkDelete">
+          Delete
+        </UiButton>
+      </div>
+      <div v-else class="flex items-center gap-2">
+        <label class="flex items-center gap-1 text-xs text-muted-foreground" :for="`auto-delete-${props.group.id}`">
+          <input
+            :id="`auto-delete-${props.group.id}`"
+            :name="`auto-delete-${props.group.id}`"
+            type="checkbox"
+            :checked="props.group.auto_delete_unavailable"
+            :disabled="props.togglingAutoDelete"
+            @change="emit('toggleAutoDelete', ($event.target as HTMLInputElement).checked)"
+          >
+          Auto-delete unavailable
+        </label>
+        <UiButton v-if="props.isSyncing || props.probeUnavailablePending" size="sm" variant="outline" @click.prevent="emit('cancelSync')">Cancel</UiButton>
+      </div>
     </div>
 
     <div
-      class="flex flex-wrap items-center gap-2 border-b border-border/80 bg-muted/40 px-4 py-2.5"
-      :class="props.isSyncing ? 'justify-between' : 'justify-end'"
+      v-if="props.isSyncing || props.syncInterrupted"
+      class="flex items-center gap-2 border-b border-border/80 bg-muted/40 px-4 py-2.5"
     >
-      <div v-if="props.isSyncing || props.syncInterrupted" class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-        <span class="text-xs font-medium text-muted-foreground">{{ props.isSyncing ? 'Load' : 'Load interrupted' }}</span>
-        <span class="rounded-full border border-primary/40 bg-primary/10 px-2.5 py-0.5 font-mono text-xs tabular-nums text-primary">
-          {{ props.syncProgressPercent }}% · {{ props.syncProcessedCount }}/{{ props.syncTotalCount }}
-        </span>
-        <span class="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700">
-          +{{ props.syncAddedCount }} new
-        </span>
-      </div>
-      <div class="flex shrink-0 flex-wrap items-center justify-end gap-2">
-        <UiButton v-if="Boolean(props.group.source_url?.trim())" size="sm" variant="outline" :disabled="props.probeUnavailablePending || props.isSyncing" @click.prevent="emit('startSync')">
-          {{ props.isSyncing ? 'Loading...' : 'Load' }}
-        </UiButton>
-        <UiButton
-          size="sm"
-          variant="outline"
-          :disabled="(!props.canProbeUnavailable && !props.probeUnavailablePending) || props.isSyncing"
-          @click.prevent="handleProbeButtonClick"
-        >
-          {{
-            props.probeUnavailablePending
-              ? `Checking... ${props.probeUnavailableProcessedCount}/${Math.max(props.probeUnavailableTotalCount, props.probeUnavailableProcessedCount)}`
-              : props.probeInterrupted
-                ? `Interrupted ${props.probeUnavailableProcessedCount}/${Math.max(props.probeUnavailableTotalCount, props.probeUnavailableProcessedCount)}`
-                : 'Check all'
-          }}
-        </UiButton>
-        <UiButton v-if="props.isSyncing || props.probeUnavailablePending" size="sm" variant="outline" @click.prevent="emit('cancelSync')">Cancel check</UiButton>
-      </div>
-      <div v-if="props.probeUnavailablePending || props.probeInterrupted" class="w-full text-right text-xs text-muted-foreground">
-        active: {{ props.probeUnavailableActiveCount }} · {{ formatProbeRate(props.probeUnavailableRatePerSec) }} · {{ formatEta(props.probeUnavailableEtaSec) }}
-      </div>
+      <span class="text-xs font-medium text-muted-foreground">{{ props.isSyncing ? 'Load' : 'Load interrupted' }}</span>
+      <span class="rounded-full border border-primary/40 bg-primary/10 px-2.5 py-0.5 font-mono text-xs tabular-nums text-primary">
+        {{ props.syncProgressPercent }}% · {{ props.syncProcessedCount }}/{{ props.syncTotalCount }}
+      </span>
+      <span class="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700">
+        +{{ props.syncAddedCount }} new
+      </span>
     </div>
 
-    <div class="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 bg-muted/35 px-4 py-2.5">
-      <div class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-        <button
-          type="button"
-          :class="statusChipClass('healthy', props.localHealthy)"
-          @click="emit('toggleLocalStatus', 'healthy', $event)"
-        >
-          healthy {{ props.metrics.healthy }}
-        </button>
-        <button
-          type="button"
-          :class="statusChipClass('unhealthy', props.localUnhealthy)"
-          @click="emit('toggleLocalStatus', 'unhealthy', $event)"
-        >
-          unhealthy {{ props.metrics.unhealthy }}
-        </button>
-        <button
-          type="button"
-          :class="statusChipClass('unknown', props.localUnknown)"
-          @click="emit('toggleLocalStatus', 'unknown', $event)"
-        >
-          unknown {{ props.metrics.unknown }}
-        </button>
-        <button
-          type="button"
-          :class="totalChipClass()"
-          title="Clear status filter"
-          @click="emit('clearLocalFilter', $event)"
-        >
-          total {{ props.metrics.total }}
-        </button>
-      </div>
-      <UiButton
-        variant="destructive"
-        size="sm"
-        class="shrink-0"
-        :disabled="props.cleanupPending"
-        @click.prevent="emit('deleteUnavailable')"
-      >
-        {{ props.cleanupPending ? 'Deleting...' : 'Delete unavailable' }}
-      </UiButton>
-    </div>
 
     <CardContent class="border-t px-0 py-0">
       <div v-if="props.isCancelled || props.deletedUnavailableCount > 0" class="flex flex-wrap items-center gap-2 px-4 pt-3">
@@ -589,12 +616,20 @@ function confirmDelete() {
             <CardContent class="p-0">
               <div class="flex items-center gap-2">
                 <div class="min-w-0 flex-1">
-                  <div class="group relative min-w-0">
-                    <p class="truncate text-sm font-medium">{{ node.url }}</p>
-                    <div
-                      class="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden max-h-48 w-[min(90vw,40rem)] overflow-y-auto whitespace-pre-wrap break-all rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md group-hover:block"
+                  <div class="group relative min-w-0 flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      :checked="props.selectedIds.has(node.id)"
+                      @change="emit('toggleSelection', node.id)"
+                      class="mt-1 h-4 w-4 rounded border-input"
                     >
-                      {{ node.url }}
+                    <div class="min-w-0 flex-1">
+                      <p class="truncate text-sm font-medium">{{ node.url }}</p>
+                      <div
+                        class="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden max-h-48 w-[min(90vw,40rem)] overflow-y-auto whitespace-pre-wrap break-all rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md group-hover:block"
+                      >
+                        {{ node.url }}
+                      </div>
                     </div>
                   </div>
                   <p class="text-xs text-muted-foreground">
@@ -641,43 +676,31 @@ function confirmDelete() {
                   </p>
                 </div>
                 <div class="flex shrink-0 flex-nowrap items-center justify-end gap-1 whitespace-nowrap">
-                  <UiButton
-                    variant="outline"
-                    size="sm"
-                    class="whitespace-nowrap"
-                    @click="copyNodeURL(node)"
-                  >
-                    {{ copiedNodeIDs.has(node.id) ? 'Copied' : 'Copy' }}
-                  </UiButton>
-                  <UiButton
-                    v-if="node.status === 'healthy'"
-                    variant="outline"
-                    size="sm"
-                    class="whitespace-nowrap"
-                    :disabled="props.probingIds.has(node.id)"
-                    @click="openNodeProbeForm(node)"
-                  >
-                    {{ props.probingIds.has(node.id) ? 'Rechecking...' : 'Recheck' }}
-                  </UiButton>
-                  <UiButton
-                    v-if="isUnavailable(node.status)"
-                    variant="outline"
-                    size="sm"
-                    class="whitespace-nowrap"
-                    :disabled="props.probingIds.has(node.id)"
-                    @click="openNodeProbeForm(node)"
-                  >
-                    {{ props.probingIds.has(node.id) ? 'Retrying...' : 'Retry' }}
-                  </UiButton>
-                  <UiButton
-                    variant="destructive"
-                    size="sm"
-                    class="whitespace-nowrap"
-                    :disabled="props.deletingIds.has(node.id)"
-                    @click="emit('removeNode', node)"
-                  >
-                    {{ props.deletingIds.has(node.id) ? 'Deleting...' : 'Delete' }}
-                  </UiButton>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger as-child>
+                      <UiButton variant="ghost" size="icon" class="h-7 w-7" @click.prevent>
+                        <MoreHorizontal class="h-3.5 w-3.5" />
+                      </UiButton>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem @click.prevent="openMoveNodeDialog(node)" :disabled="props.movingIds.has(node.id)">
+                        <ArrowRight class="mr-2 h-3.5 w-3.5" />
+                        Move
+                      </DropdownMenuItem>
+                      <DropdownMenuItem @click.prevent="copyNodeURL(node)">
+                        <Copy class="mr-2 h-3.5 w-3.5" />
+                        Copy
+                      </DropdownMenuItem>
+                      <DropdownMenuItem @click.prevent="emit('retryNode', { node, mode: 'normal' })" :disabled="props.probingIds.has(node.id)">
+                        <RefreshCw class="mr-2 h-3.5 w-3.5" />
+                        {{ node.status === 'unknown' ? 'Check' : 'Retry' }}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem class="text-destructive focus:text-destructive" @click.prevent="emit('removeNode', node)" :disabled="props.deletingIds.has(node.id)">
+                        <Trash2 class="mr-2 h-3.5 w-3.5" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
             </CardContent>
@@ -843,6 +866,26 @@ function confirmDelete() {
             placeholder="https://example.com/nodes.txt"
           />
         </div>
+        <div class="flex items-center gap-2">
+          <input
+            id="edit-random-enabled"
+            v-model="editRandomEnabled"
+            type="checkbox"
+            class="h-4 w-4 rounded border-input"
+          >
+          <label for="edit-random-enabled" class="text-sm">Random selection for subscriptions</label>
+        </div>
+        <div class="space-y-2">
+          <UiLabel for="edit-random-limit">Limit (optional)</UiLabel>
+          <UiInput
+            id="edit-random-limit"
+            v-model="editRandomLimit"
+            type="number"
+            min="1"
+            placeholder="Max nodes to return"
+          />
+          <p class="text-xs text-muted-foreground">Maximum number of nodes to return in subscriptions</p>
+        </div>
       </div>
       <DialogFooter>
         <UiButton variant="outline" @click="editDialogOpen = false">Cancel</UiButton>
@@ -854,19 +897,65 @@ function confirmDelete() {
   </Dialog>
 
   <!-- Delete Group Dialog -->
-  <Dialog v-model:open="deleteDialogOpen">
+  <Dialog :open="deleteDialogOpen" @update:open="deleteDialogOpen = $event">
     <DialogContent>
       <DialogHeader>
-        <DialogTitle>Delete Group</DialogTitle>
+        <DialogTitle>Delete group</DialogTitle>
         <DialogDescription>
-          Are you sure you want to delete "{{ props.group.name }}"? This action cannot be undone.
+          Are you sure you want to delete group "{{ props.group.name }}"? This action cannot be undone.
         </DialogDescription>
       </DialogHeader>
       <DialogFooter>
         <UiButton variant="outline" @click="deleteDialogOpen = false">Cancel</UiButton>
         <UiButton variant="destructive" @click="confirmDelete" :disabled="props.deletingGroup">
-          {{ props.deletingGroup ? 'Deleting...' : 'Delete' }}
+          Delete
         </UiButton>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+
+  <Dialog :open="moveNodeDialogOpen" @update:open="moveNodeDialogOpen = $event">
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>Move node</DialogTitle>
+        <DialogDescription>
+          Select target group to move this node.
+        </DialogDescription>
+      </DialogHeader>
+      <div class="py-4">
+        <UiLabel for="move-target-group">Target group</UiLabel>
+        <select id="move-target-group" v-model="moveTargetGroupId" class="mt-1.5 w-full rounded-md border bg-background px-3 py-2 text-sm">
+          <option value="">No group</option>
+          <option v-for="g in props.allGroups" :key="g.id" :value="g.id">{{ g.name }}</option>
+        </select>
+      </div>
+      <DialogFooter>
+        <UiButton variant="outline" @click="handleDuplicateNode">Duplicate</UiButton>
+        <UiButton variant="outline" @click="moveNodeDialogOpen = false">Cancel</UiButton>
+        <UiButton @click="confirmMoveNode">Move</UiButton>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+
+  <Dialog :open="bulkMoveDialogOpen" @update:open="bulkMoveDialogOpen = $event">
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>Move selected nodes</DialogTitle>
+        <DialogDescription>
+          Select target group to move {{ props.selectedIds.size }} selected nodes.
+        </DialogDescription>
+      </DialogHeader>
+      <div class="py-4">
+        <UiLabel for="bulk-move-target-group">Target group</UiLabel>
+        <select id="bulk-move-target-group" v-model="bulkMoveTargetGroupId" class="mt-1.5 w-full rounded-md border bg-background px-3 py-2 text-sm">
+          <option value="">No group</option>
+          <option v-for="g in props.allGroups" :key="g.id" :value="g.id">{{ g.name }}</option>
+        </select>
+      </div>
+      <DialogFooter>
+        <UiButton variant="outline" @click="handleBulkDuplicate">Duplicate</UiButton>
+        <UiButton variant="outline" @click="bulkMoveDialogOpen = false">Cancel</UiButton>
+        <UiButton @click="confirmBulkMove">Move</UiButton>
       </DialogFooter>
     </DialogContent>
   </Dialog>

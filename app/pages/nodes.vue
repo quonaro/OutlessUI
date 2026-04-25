@@ -14,7 +14,7 @@ import { useInfiniteNodes } from '~/composables/nodes/useInfiniteNodes'
 import { useProbeJobNodePatch } from '~/composables/nodes/useProbeJobNodePatch'
 import { useGroups } from '~/composables/groups/useGroups'
 import type { Node } from '~/utils/schemas/node'
-import { createNode, deleteNode, probeNode } from '~/utils/services/node'
+import { createNode, deleteNode, probeNode, updateNode } from '~/utils/services/node'
 import { createGroup } from '~/utils/services/group'
 import {
   ensureAdminRealtimeConnected,
@@ -74,13 +74,13 @@ const infiniteNodesFlat = computed<Node[]>(() =>
 const search = ref('')
 const statusFilter = ref<StatusFilter>('all')
 const pingFilter = ref<PingFilter>('all')
-/** Empty string means all countries. */
-const countryFilter = ref('')
 
 const showCreateGroupDialog = ref(false)
 const showCreateNodeDialog = ref(false)
 const groupNameInput = ref('')
 const groupSourceURLInput = ref('')
+const groupRandomEnabledInput = ref(false)
+const groupRandomLimitInput = ref<string>('')
 const nodeURLInput = ref('')
 const nodeGroupIDInput = ref('')
 const createNodeErrorMessage = ref('')
@@ -88,6 +88,7 @@ const isCreateGroupSubmitting = ref(false)
 const isCreateNodeSubmitting = ref(false)
 const deletingNodeIDs = ref<Set<string>>(new Set())
 const probingNodeIDs = ref<Set<string>>(new Set())
+const selectedNodeIDs = ref<Set<string>>(new Set())
 const nodeProbeFormOpen = ref(false)
 const nodeProbeTarget = ref<Node | null>(null)
 const nodeProbeModeSelection = ref<'normal' | 'fast'>('normal')
@@ -95,12 +96,14 @@ const nodeProbeURLSelection = ref('')
 const singleNodeProbeFormStorageKey = 'outless:nodes:single-probe-form'
 
 const createGroupMutation = useMutation({
-  mutationFn: (payload: { name: string; source_url: string }) => createGroup(payload, baseURL),
+  mutationFn: (payload: { name: string; source_url: string; random_enabled: boolean; random_limit: number | null }) => createGroup({ ...payload, auto_delete_unavailable: false }, baseURL),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['groups'] })
     showCreateGroupDialog.value = false
     groupNameInput.value = ''
     groupSourceURLInput.value = ''
+    groupRandomEnabledInput.value = false
+    groupRandomLimitInput.value = ''
   },
 })
 
@@ -212,25 +215,8 @@ const pingFilteredNodes = computed<Node[]>(() => {
   return list.filter((node) => matchesPingFilter(node.latency_ms, pingFilter.value))
 })
 
-const countryOptions = computed(() => {
-  const set = new Set<string>()
-  for (const n of pingFilteredNodes.value) {
-    const c = normalizeCountryCode(n.country)
-    if (c.length === 2) set.add(c)
-  }
-  return [...set].sort()
-})
-
-const countryFilteredNodes = computed<Node[]>(() => {
-  const list = pingFilteredNodes.value
-  const want = countryFilter.value.trim()
-  if (!want) return list
-  const target = normalizeCountryCode(want)
-  return list.filter((n) => normalizeCountryCode(n.country) === target)
-})
-
 const filteredFlatNodes = computed<Node[]>(() => {
-  const list = countryFilteredNodes.value
+  const list = pingFilteredNodes.value
   const searchValue = search.value.trim().toLowerCase()
   return list.filter((node) => {
     if (statusFilter.value !== 'all' && node.status !== statusFilter.value) {
@@ -249,7 +235,12 @@ function submitCreateGroup() {
   if (!name || isCreateGroupSubmitting.value) return
   isCreateGroupSubmitting.value = true
   createGroupMutation.mutate(
-    { name, source_url: sourceURL },
+    {
+      name,
+      source_url: sourceURL,
+      random_enabled: groupRandomEnabledInput.value,
+      random_limit: groupRandomLimitInput.value ? parseInt(groupRandomLimitInput.value) : null,
+    },
     { onSettled: () => { isCreateGroupSubmitting.value = false } },
   )
 }
@@ -284,6 +275,69 @@ function resolveCreateNodeErrorMessage(error: unknown): string {
   const message = (error as { message?: unknown })?.message
   if (typeof message === 'string' && message.trim()) return message
   return 'Failed to create node.'
+}
+
+function handleAddNode(groupId: string) {
+  nodeGroupIDInput.value = groupId
+  showCreateNodeDialog.value = true
+}
+
+const movingNodeIDs = ref<Set<string>>(new Set())
+
+function handleMoveNode(payload: { node: Node, targetGroupId: string }) {
+  const next = new Set(movingNodeIDs.value)
+  next.add(payload.node.id)
+  movingNodeIDs.value = next
+  updateNode(payload.node.id, { url: payload.node.url, group_id: payload.targetGroupId }, baseURL)
+    .then(() => {
+      queryClient.invalidateQueries({ queryKey: ['nodes'] })
+      queryClient.invalidateQueries({ queryKey: ['groups'] })
+    })
+    .finally(() => {
+      const current = new Set(movingNodeIDs.value)
+      current.delete(payload.node.id)
+      movingNodeIDs.value = current
+    })
+}
+
+function handleToggleSelection(nodeId: string) {
+  const next = new Set(selectedNodeIDs.value)
+  if (next.has(nodeId)) {
+    next.delete(nodeId)
+  } else {
+    next.add(nodeId)
+  }
+  selectedNodeIDs.value = next
+}
+
+function handleBulkMove(targetGroupId: string) {
+  const promises = Array.from(selectedNodeIDs.value).map(nodeId =>
+    updateNode(nodeId, { url: '', group_id: targetGroupId }, baseURL)
+  )
+  Promise.all(promises)
+    .then(() => {
+      queryClient.invalidateQueries({ queryKey: ['nodes'] })
+      queryClient.invalidateQueries({ queryKey: ['groups'] })
+      selectedNodeIDs.value = new Set()
+    })
+}
+
+function handleBulkDelete() {
+  const promises = Array.from(selectedNodeIDs.value).map(nodeId => deleteNode(nodeId, baseURL))
+  Promise.all(promises)
+    .then(() => {
+      queryClient.invalidateQueries({ queryKey: ['nodes'] })
+      queryClient.invalidateQueries({ queryKey: ['groups'] })
+      selectedNodeIDs.value = new Set()
+    })
+}
+
+function handleDuplicateNode(node: Node) {
+  createNode({ url: node.url, group_id: node.group_id }, baseURL)
+    .then(() => {
+      queryClient.invalidateQueries({ queryKey: ['nodes'] })
+      queryClient.invalidateQueries({ queryKey: ['groups'] })
+    })
 }
 
 function removeNode(node: Node) {
@@ -478,10 +532,6 @@ watch([nodeProbeModeSelection, nodeProbeURLSelection], ([mode, probeURL]) => {
             <option value="ok">Ok (100-200 ms)</option>
             <option value="bad">Bad (&gt; 200 ms)</option>
           </select>
-          <select id="country-filter" v-model="countryFilter" name="country-filter" class="rounded-md border bg-background px-3 py-2 text-sm">
-            <option value="">All countries</option>
-            <option v-for="c in countryOptions" :key="c" :value="c">{{ countryBadgeLabel(c) }}</option>
-          </select>
         </div>
 
         <div v-if="showInitialNodesShell" class="py-8 text-center text-muted-foreground">
@@ -494,7 +544,13 @@ watch([nodeProbeModeSelection, nodeProbeURLSelection], ([mode, probeURL]) => {
           :search="search"
           :status-filter="statusFilter"
           :ping-filter="pingFilter"
-          :country-filter="countryFilter"
+          :selected-node-ids="selectedNodeIDs"
+          @add-node="handleAddNode"
+          @move-node="handleMoveNode"
+          @toggle-selection="handleToggleSelection"
+          @bulk-move="handleBulkMove"
+          @bulk-delete="handleBulkDelete"
+          @duplicate-node="handleDuplicateNode"
         />
 
         <div v-else class="space-y-2">
@@ -556,7 +612,7 @@ watch([nodeProbeModeSelection, nodeProbeURLSelection], ([mode, probeURL]) => {
                     :disabled="probingNodeIDs.has(node.id)"
                     @click="retryNode(node)"
                   >
-                    {{ probingNodeIDs.has(node.id) ? 'Retrying...' : 'Retry' }}
+                    {{ probingNodeIDs.has(node.id) ? 'Checking...' : (node.status === 'unknown' ? 'Check' : 'Retry') }}
                   </UiButton>
                   <UiButton
                     variant="destructive"
@@ -598,6 +654,26 @@ watch([nodeProbeModeSelection, nodeProbeURLSelection], ([mode, probeURL]) => {
                 name="create-group-source-url"
                 placeholder="https://example.com/subscription"
               />
+            </div>
+            <div class="flex items-center gap-2">
+              <input
+                id="create-group-random-enabled"
+                v-model="groupRandomEnabledInput"
+                type="checkbox"
+                class="h-4 w-4 rounded border-input"
+              >
+              <label for="create-group-random-enabled" class="text-sm">Random selection for subscriptions</label>
+            </div>
+            <div class="space-y-2">
+              <label class="text-sm font-medium" for="create-group-random-limit">Limit (optional)</label>
+              <UiInput
+                id="create-group-random-limit"
+                v-model="groupRandomLimitInput"
+                type="number"
+                min="1"
+                placeholder="Max nodes to return"
+              />
+              <p class="text-xs text-muted-foreground">Maximum number of nodes to return in subscriptions</p>
             </div>
           </CardContent>
           <CardFooter class="flex justify-end gap-2">
