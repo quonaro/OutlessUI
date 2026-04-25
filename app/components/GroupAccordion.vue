@@ -5,7 +5,7 @@ import type { Group } from '~/utils/schemas/group'
 import type { Node, NodeStatus } from '~/utils/schemas/node'
 import { useProbeJobNodePatch } from '~/composables/nodes/useProbeJobNodePatch'
 import { deleteNode, probeNode } from '~/utils/services/node'
-import { deleteUnavailableGroupNodes, updateGroup } from '~/utils/services/group'
+import { deleteGroup, deleteUnavailableGroupNodes, updateGroup } from '~/utils/services/group'
 import { useGroupSync } from '~/composables/groups/useGroupSync'
 import { useGroupAccordionFilters } from '~/composables/groups/useGroupAccordionFilters'
 import GroupAccordionItem from '~/components/GroupAccordionItem.vue'
@@ -29,6 +29,8 @@ const deletingNodeIDs = ref<Set<string>>(new Set())
 const probingNodeIDs = ref<Set<string>>(new Set())
 const cleanupGroupIDs = ref<Set<string>>(new Set())
 const togglingAutoDeleteGroupIDs = ref<Set<string>>(new Set())
+const deletingGroupIDs = ref<Set<string>>(new Set())
+const editingGroupIDs = ref<Set<string>>(new Set())
 
 const {
   visibleGroups,
@@ -86,6 +88,18 @@ const deleteUnavailableMutation = useMutation({
     queryClient.invalidateQueries({ queryKey: ['nodes'] })
     queryClient.invalidateQueries({ queryKey: ['groups'] })
   },
+})
+const deleteGroupMutation = useMutation({
+  mutationFn: (groupId: string) => deleteGroup(groupId, baseURL),
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['groups'] })
+    queryClient.invalidateQueries({ queryKey: ['nodes'] })
+  },
+})
+const editGroupMutation = useMutation({
+  mutationFn: ({ id, name, source_url, auto_delete_unavailable }: { id: string, name: string, source_url: string, auto_delete_unavailable: boolean }) =>
+    updateGroup(id, { name, source_url, auto_delete_unavailable }, baseURL),
+  onSuccess: () => queryClient.invalidateQueries({ queryKey: ['groups'] }),
 })
 function stateForGroup(groupID: string) {
   if (!syncStates[groupID]) {
@@ -247,6 +261,38 @@ function deletedUnavailableCount(groupID: string): number {
 function nodeSyncError(groupID: string, nodeID: string): string {
   return stateForGroup(groupID).syncingNodes.value.get(nodeID)?.error ?? ''
 }
+function handleEditGroup(group: { id: string, name: string, source_url: string }) {
+  const existingGroup = props.groups.find(g => g.id === group.id)
+  if (!existingGroup) return
+
+  const next = new Set(editingGroupIDs.value)
+  next.add(group.id)
+  editingGroupIDs.value = next
+  editGroupMutation.mutate({
+    id: group.id,
+    name: group.name,
+    source_url: group.source_url,
+    auto_delete_unavailable: existingGroup.auto_delete_unavailable,
+  }, {
+    onSettled: () => {
+      const current = new Set(editingGroupIDs.value)
+      current.delete(group.id)
+      editingGroupIDs.value = current
+    },
+  })
+}
+function handleDeleteGroup(groupId: string) {
+  const next = new Set(deletingGroupIDs.value)
+  next.add(groupId)
+  deletingGroupIDs.value = next
+  deleteGroupMutation.mutate(groupId, {
+    onSettled: () => {
+      const current = new Set(deletingGroupIDs.value)
+      current.delete(groupId)
+      deletingGroupIDs.value = current
+    },
+  })
+}
 
 function nodeProbeState(groupID: string, nodeID: string) {
   return stateForGroup(groupID).probingUnavailableNodes.value.get(nodeID) ?? null
@@ -294,6 +340,8 @@ onBeforeUnmount(() => {
       :toggling-auto-delete="togglingAutoDeleteGroupIDs.has(group.id)"
       :cleanup-pending="cleanupGroupIDs.has(group.id)"
       :probe-unavailable-pending="probeUnavailableIsRunning(group.id)"
+      :editing-group="editingGroupIDs.has(group.id)"
+      :deleting-group="deletingGroupIDs.has(group.id)"
       :probe-unavailable-processed-count="probeUnavailableProcessedCount(group.id)"
       :probe-unavailable-total-count="probeUnavailableTotalCount(group.id)"
       :probe-unavailable-active-count="probeUnavailableActiveCount(group.id)"
@@ -321,6 +369,8 @@ onBeforeUnmount(() => {
       @probe-unavailable="(options) => probeUnavailable(group, options)"
       @remove-node="removeNode"
       @retry-node="retryNode"
+      @edit-group="handleEditGroup"
+      @delete-group="handleDeleteGroup"
     />
   </div>
 </template>

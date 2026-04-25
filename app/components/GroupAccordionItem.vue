@@ -9,6 +9,23 @@ import UiButton from '~/components/ui/button/button.vue'
 import UiCard from '~/components/ui/card/card.vue'
 import CardContent from '~/components/ui/card/CardContent.vue'
 import { countryBadgeLabel, normalizeCountryCode } from '~/utils/country'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '~/components/ui/dropdown-menu'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '~/components/ui/dialog'
+import UiInput from '~/components/ui/input/input.vue'
+import UiLabel from '~/components/ui/label/label.vue'
+import { MoreHorizontal, Pencil, Trash2 } from 'lucide-vue-next'
 
 type PingFilter = 'all' | 'good' | 'ok' | 'bad'
 type StatusFilter = 'all' | 'healthy' | 'unhealthy' | 'unknown'
@@ -51,6 +68,8 @@ const props = withDefaults(defineProps<{
   localUnknown: boolean
   syncNodeError: (nodeId: string) => string
   probeNodeState: (nodeId: string) => ProbeUnavailableNodeStatus | null
+  editingGroup: boolean
+  deletingGroup: boolean
 }>(), {})
 
 const emit = defineEmits<{
@@ -63,6 +82,8 @@ const emit = defineEmits<{
   deleteUnavailable: []
   removeNode: [node: Node]
   retryNode: [payload: { node: Node, mode: 'normal' | 'fast', probeURL?: string }]
+  editGroup: [group: { id: string, name: string, source_url: string }]
+  deleteGroup: [groupId: string]
 }>()
 
 const copiedNodeIDs = ref<Set<string>>(new Set())
@@ -76,6 +97,10 @@ const nodeProbeTarget = ref<Node | null>(null)
 const nodeProbeModeSelection = ref<'normal' | 'fast'>('normal')
 const nodeProbeURLSelection = ref('')
 const accordionOpen = ref(false)
+const editDialogOpen = ref(false)
+const deleteDialogOpen = ref(false)
+const editName = ref('')
+const editSourceUrl = ref('')
 
 const accordionStorageKey = computed(() => `outless:nodes:group-accordion:${props.group.id}`)
 const groupProbeFormStorageKey = computed(() => `outless:nodes:group-probe-form:${props.group.id}`)
@@ -380,19 +405,62 @@ function formatEta(etaSec: number | null): string {
   const seconds = total % 60
   return `ETA ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 }
+
+function openEditDialog() {
+  editName.value = props.group.name
+  editSourceUrl.value = props.group.source_url ?? ''
+  editDialogOpen.value = true
+}
+
+function confirmEdit() {
+  emit('editGroup', {
+    id: props.group.id,
+    name: editName.value.trim(),
+    source_url: editSourceUrl.value.trim(),
+  })
+  editDialogOpen.value = false
+}
+
+function openDeleteDialog() {
+  deleteDialogOpen.value = true
+}
+
+function confirmDelete() {
+  emit('deleteGroup', props.group.id)
+  deleteDialogOpen.value = false
+}
 </script>
 
 <template>
   <details class="rounded-md border bg-card" :open="accordionOpen" @toggle="onAccordionToggle">
     <summary class="cursor-pointer list-none bg-muted/25 px-4 py-3">
-      <div class="min-w-0">
-        <p class="truncate font-medium">
-          {{ props.group.name }} <span class="text-muted-foreground">({{ props.group.total_nodes }})</span>
-        </p>
-        <p class="truncate text-xs text-muted-foreground">
-          {{ props.group.source_url || 'Manual group' }}
-          <span v-if="props.group.last_synced_at"> · Last sync: {{ new Date(props.group.last_synced_at).toLocaleString() }}</span>
-        </p>
+      <div class="flex min-w-0 items-start justify-between gap-2">
+        <div class="min-w-0 flex-1">
+          <p class="truncate font-medium">
+            {{ props.group.name }} <span class="text-muted-foreground">({{ props.group.total_nodes }})</span>
+          </p>
+          <p class="truncate text-xs text-muted-foreground">
+            {{ props.group.source_url || 'Manual group' }}
+            <span v-if="props.group.last_synced_at"> · Last sync: {{ new Date(props.group.last_synced_at).toLocaleString() }}</span>
+          </p>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <UiButton variant="ghost" size="icon" class="h-8 w-8" @click.prevent>
+              <MoreHorizontal class="h-4 w-4" />
+            </UiButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem @click.prevent="openEditDialog" :disabled="props.editingGroup">
+              <Pencil class="mr-2 h-4 w-4" />
+              Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem class="text-destructive focus:text-destructive" @click.prevent="openDeleteDialog" :disabled="props.deletingGroup">
+              <Trash2 class="mr-2 h-4 w-4" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </summary>
     <div class="flex items-center justify-end border-b border-border/80 bg-muted/25 px-4 py-2">
@@ -747,4 +815,58 @@ function formatEta(etaSec: number | null): string {
       </div>
     </div>
   </div>
+
+  <!-- Edit Group Dialog -->
+  <Dialog v-model:open="editDialogOpen">
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>Edit Group</DialogTitle>
+        <DialogDescription>
+          Change the group name and public URL.
+        </DialogDescription>
+      </DialogHeader>
+      <div class="space-y-4 py-4">
+        <div class="space-y-2">
+          <UiLabel for="edit-name">Name</UiLabel>
+          <UiInput
+            id="edit-name"
+            v-model="editName"
+            placeholder="Group name"
+          />
+        </div>
+        <div class="space-y-2">
+          <UiLabel for="edit-source-url">Public URL</UiLabel>
+          <UiInput
+            id="edit-source-url"
+            v-model="editSourceUrl"
+            placeholder="https://example.com/nodes.txt"
+          />
+        </div>
+      </div>
+      <DialogFooter>
+        <UiButton variant="outline" @click="editDialogOpen = false">Cancel</UiButton>
+        <UiButton @click="confirmEdit" :disabled="!editName.value?.trim() || props.editingGroup">
+          {{ props.editingGroup ? 'Saving...' : 'Save' }}
+        </UiButton>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+
+  <!-- Delete Group Dialog -->
+  <Dialog v-model:open="deleteDialogOpen">
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>Delete Group</DialogTitle>
+        <DialogDescription>
+          Are you sure you want to delete "{{ props.group.name }}"? This action cannot be undone.
+        </DialogDescription>
+      </DialogHeader>
+      <DialogFooter>
+        <UiButton variant="outline" @click="deleteDialogOpen = false">Cancel</UiButton>
+        <UiButton variant="destructive" @click="confirmDelete" :disabled="props.deletingGroup">
+          {{ props.deletingGroup ? 'Deleting...' : 'Delete' }}
+        </UiButton>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>
