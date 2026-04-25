@@ -1,7 +1,4 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
-// @ts-ignore
-const backendUrl = process.env.BACKEND_URL || process.env.NUXT_PUBLIC_API_BASE || 'http://localhost:41220'
-
 export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
 
@@ -52,7 +49,7 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     public: {
-      apiBase: backendUrl,
+      apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://localhost:41220',
     },
   },
 
@@ -103,13 +100,15 @@ export default defineNuxtConfig({
         'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
         'Access-Control-Allow-Headers': '*',
       },
-      proxy: {
-        '/api': {
-          target: backendUrl,
-          changeOrigin: true,
-          rewrite: (path: string) => path.replace(/^\/api/, ''),
+      ...(process.env.NODE_ENV === 'development' ? {
+        proxy: {
+          '/api': {
+            target: process.env.NUXT_PUBLIC_API_BASE || 'http://localhost:41220',
+            changeOrigin: true,
+            rewrite: (path: string) => path.replace(/^\/api/, ''),
+          },
         },
-      },
+      } : {}),
     },
   },
 })
