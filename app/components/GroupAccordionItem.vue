@@ -25,7 +25,7 @@ import {
 } from '~/components/ui/dialog'
 import UiInput from '~/components/ui/input/input.vue'
 import UiLabel from '~/components/ui/label/label.vue'
-import { ArrowRight, Copy, MoreHorizontal, Plus, Pencil, RefreshCw, Trash2 } from 'lucide-vue-next'
+import { ArrowRight, Copy, MoreHorizontal, Plus, Pencil, RefreshCw, Trash2, X } from 'lucide-vue-next'
 
 type PingFilter = 'all' | 'good' | 'ok' | 'bad'
 type StatusFilter = 'all' | 'healthy' | 'unhealthy' | 'unknown'
