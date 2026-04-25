@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import {
   LayoutDashboard,
-  Settings,
   Key,
   Globe,
   LogOut,
@@ -22,7 +21,6 @@ const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
   { id: 'tokens', label: 'Tokens', icon: Key, path: '/tokens' },
   { id: 'nodes', label: 'Nodes', icon: Globe, path: '/nodes' },
-  { id: 'settings', label: 'Settings', icon: Settings, path: '/settings' },
 ]
 
 const activeItem = computed(() => {

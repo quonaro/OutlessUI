@@ -2,7 +2,7 @@
 definePageMeta({
   layout: false,
   middleware: [
-    () => navigateTo('/settings', { redirectCode: 301 }),
+    () => navigateTo('/dashboard', { redirectCode: 301 }),
   ],
 })
 </script>
