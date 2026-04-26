@@ -26,8 +26,6 @@ import { countryBadgeLabel, normalizeCountryCode } from '~/utils/country'
 definePageMeta({ layout: 'default' })
 
 type ViewMode = 'grouped' | 'flat'
-type StatusFilter = 'all' | 'healthy' | 'unhealthy' | 'unknown'
-type PingFilter = 'all' | 'good' | 'ok' | 'bad'
 
 interface PublicRefreshStateMessage {
   type: 'public_refresh_state'
@@ -69,8 +67,6 @@ const infiniteNodesFlat = computed<Node[]>(() =>
 )
 
 const search = ref('')
-const statusFilter = ref<StatusFilter>('all')
-const pingFilter = ref<PingFilter>('all')
 
 const showCreateGroupDialog = ref(false)
 const showCreateNodeDialog = ref(false)
@@ -89,7 +85,7 @@ const bulkMoveDialogOpen = ref(false)
 const bulkMoveTargetGroupId = ref('')
 
 const createGroupMutation = useMutation({
-  mutationFn: (payload: { name: string; source_url: string; random_enabled: boolean; random_limit: number | null }) => createGroup({ ...payload, auto_delete_unavailable: false }),
+  mutationFn: (payload: { name: string; source_url: string; random_enabled: boolean; random_limit: number | null }) => createGroup(payload),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['groups'] })
     showCreateGroupDialog.value = false
@@ -176,24 +172,13 @@ const groupNameByID = computed<Record<string, string>>(() => {
   return map
 })
 
-const pingFilteredNodes = computed<Node[]>(() => {
-  if (viewMode.value === 'grouped') return []
-  const list = infiniteNodesFlat.value
-  if (pingFilter.value === 'all') return list
-  return list.filter((node) => matchesPingFilter(node.latency_ms, pingFilter.value))
-})
-
 const filteredFlatNodes = computed<Node[]>(() => {
-  const list = pingFilteredNodes.value
+  const list = infiniteNodesFlat.value
   const searchValue = search.value.trim().toLowerCase()
   return list.filter((node) => {
-    if (statusFilter.value !== 'all' && node.status !== statusFilter.value) {
-      return false
-    }
     if (!searchValue) return true
     const groupName = groupNameByID.value[node.group_id] ?? ''
-    const haystack = `${node.url} ${node.id} ${node.country} ${groupName}`.toLowerCase()
-    return haystack.includes(searchValue)
+    return `${node.url} ${node.id} ${node.country} ${groupName}`.toLowerCase().includes(searchValue)
   })
 })
 
@@ -341,22 +326,7 @@ async function copyNodeURL(node: Node) {
   }, 1200)
 }
 
-function isUnavailable(status: Node['status']): boolean {
-  return status === 'unknown' || status === 'unhealthy'
-}
 
-function latencyClass(latencyMS: number): string {
-  if (latencyMS < 100) return 'text-emerald-600 dark:text-emerald-400'
-  if (latencyMS <= 200) return 'text-amber-600 dark:text-amber-400'
-  return 'text-red-600 dark:text-red-400'
-}
-
-function matchesPingFilter(latencyMS: number, filter: PingFilter): boolean {
-  if (filter === 'good') return latencyMS < 100
-  if (filter === 'ok') return latencyMS >= 100 && latencyMS <= 200
-  if (filter === 'bad') return latencyMS > 200
-  return true
-}
 
 function maybeLoadMore() {
   if (viewMode.value !== 'flat') return
@@ -479,18 +449,6 @@ onBeforeUnmount(() => {
             placeholder="Search by URL, ID, country, group..."
             class="max-w-md"
           />
-          <select id="status-filter" v-model="statusFilter" name="status-filter" class="rounded-md border bg-background px-3 py-2 text-sm">
-            <option value="all">All statuses</option>
-            <option value="healthy">Healthy</option>
-            <option value="unhealthy">Unhealthy</option>
-            <option value="unknown">Unknown</option>
-          </select>
-          <select id="ping-filter" v-model="pingFilter" name="ping-filter" class="rounded-md border bg-background px-3 py-2 text-sm">
-            <option value="all">All ping</option>
-            <option value="good">Good (&lt; 100 ms)</option>
-            <option value="ok">Ok (100-200 ms)</option>
-            <option value="bad">Bad (&gt; 200 ms)</option>
-          </select>
         </div>
 
         <div v-if="showInitialNodesShell" class="py-8 text-center text-muted-foreground">
@@ -501,8 +459,6 @@ onBeforeUnmount(() => {
           v-else-if="viewMode === 'grouped'"
           :groups="groups ?? []"
           :search="search"
-          :status-filter="statusFilter"
-          :ping-filter="pingFilter"
           :selected-node-ids="selectedNodeIDs"
           @add-node="handleAddNode"
           @move-node="handleMoveNode"
@@ -529,20 +485,7 @@ onBeforeUnmount(() => {
                   </div>
                   <p class="text-xs text-muted-foreground">
                     {{ node.id }} · {{ groupNameByID[node.group_id] ?? (node.group_id || 'No group') }} ·
-                    <span :class="latencyClass(node.latency_ms)">{{ node.latency_ms }} ms</span>
                     <span class="ml-1 inline-flex items-center rounded-full border border-border/80 bg-muted/40 px-2 py-0.5 tabular-nums">{{ countryBadgeLabel(node.country) }}</span>
-                  </p>
-                  <p class="mt-1 text-xs">
-                    <span
-                      class="rounded px-1.5 py-0.5"
-                      :class="node.status === 'healthy'
-                        ? 'bg-emerald-500/15 text-emerald-700'
-                        : node.status === 'unhealthy'
-                          ? 'bg-red-500/15 text-red-700'
-                          : 'bg-amber-500/15 text-amber-700'"
-                    >
-                      {{ node.status }}
-                    </span>
                   </p>
                 </div>
                 <div class="flex shrink-0 flex-nowrap gap-1">

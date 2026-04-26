@@ -136,22 +136,6 @@ function handleDelete(node: Node) {
   deleteMutation.mutate(node.id)
 }
 
-function statusBadgeClass(status: Node['status']): string {
-  switch (status) {
-    case 'healthy':
-      return 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-    case 'unhealthy':
-      return 'bg-red-500/20 text-red-600 dark:text-red-400'
-    default:
-      return 'bg-muted text-muted-foreground'
-  }
-}
-
-function latencyClass(latencyMS: number): string {
-  if (latencyMS < 100) return 'text-emerald-600 dark:text-emerald-400'
-  if (latencyMS <= 200) return 'text-amber-600 dark:text-amber-400'
-  return 'text-red-600 dark:text-red-400'
-}
 </script>
 
 <template>
@@ -189,17 +173,8 @@ function latencyClass(latencyMS: number): string {
         <div class="flex items-start justify-between gap-4">
           <div class="max-w-[52%] min-w-0 space-y-1">
             <div class="flex flex-wrap items-center gap-2">
-              <span
-                class="rounded-full px-2 py-0.5 text-xs font-medium uppercase"
-                :class="statusBadgeClass(node.status)"
-              >
-                {{ node.status }}
-              </span>
               <span class="text-sm font-medium">
                 {{ node.country || 'XX' }}
-              </span>
-              <span class="text-xs" :class="latencyClass(node.latency_ms)">
-                {{ node.latency_ms }} ms
               </span>
             </div>
             <p class="truncate font-mono text-sm" :title="node.url">

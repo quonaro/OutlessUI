@@ -58,7 +58,7 @@ function handleCreateGroup() {
   if (!groupName.value.trim() || isCreateSubmitting.value) return
   isCreateSubmitting.value = true
   createMutation.mutate(
-    { name: groupName.value, source_url: groupSourceURL.value.trim(), auto_delete_unavailable: false, random_enabled: false },
+    { name: groupName.value, source_url: groupSourceURL.value.trim(), random_enabled: false },
     {
       onSettled: () => {
         isCreateSubmitting.value = false
@@ -76,7 +76,6 @@ function handleEditGroup() {
       data: {
         name: groupName.value,
         source_url: groupSourceURL.value.trim(),
-        auto_delete_unavailable: selectedGroup.value.auto_delete_unavailable ?? false,
         random_enabled: selectedGroup.value.random_enabled ?? false,
       },
     },

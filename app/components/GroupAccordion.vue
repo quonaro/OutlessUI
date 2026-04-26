@@ -2,19 +2,16 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import type { Group } from '~/utils/schemas/group'
-import type { Node, NodeStatus } from '~/utils/schemas/node'
+import type { Node } from '~/utils/schemas/node'
 import { deleteNode } from '~/utils/services/node'
-import { deleteGroup, deleteUnavailableGroupNodes, updateGroup } from '~/utils/services/group'
+import { deleteGroup, updateGroup } from '~/utils/services/group'
 import { useGroupSync } from '~/composables/groups/useGroupSync'
-import { useGroupAccordionFilters } from '~/composables/groups/useGroupAccordionFilters'
 import GroupAccordionItem from '~/components/GroupAccordionItem.vue'
 import { onAdminRealtimeOpen } from '~/utils/admin-realtime'
 
 const props = defineProps<{
   groups: Group[]
   search: string
-  statusFilter: 'all' | 'healthy' | 'unhealthy' | 'unknown'
-  pingFilter: 'all' | 'good' | 'ok' | 'bad'
   selectedNodeIds: Set<string>
 }>()
 
@@ -30,23 +27,15 @@ const queryClient = useQueryClient()
 const syncStates: Record<string, ReturnType<typeof useGroupSync>> = {}
 const deletingNodeIDs = ref<Set<string>>(new Set())
 const movingNodeIDs = ref<Set<string>>(new Set())
-const cleanupGroupIDs = ref<Set<string>>(new Set())
-const togglingAutoDeleteGroupIDs = ref<Set<string>>(new Set())
 const deletingGroupIDs = ref<Set<string>>(new Set())
 const editingGroupIDs = ref<Set<string>>(new Set())
 
-const {
-  visibleGroups,
-  statusMetricsForGroup,
-  toggleLocalStatus,
-  isLocalStatusActive,
-  clearLocalStatusFilter,
-} = useGroupAccordionFilters({
-  groups: () => props.groups,
-  nodes: () => [],
-  search: () => props.search,
-  statusFilter: () => props.statusFilter,
-  perGroupNodeSource: () => true,
+const visibleGroups = computed(() => {
+  const q = props.search.trim().toLowerCase()
+  if (!q) return props.groups
+  return props.groups.filter(g =>
+    `${g.name} ${g.id} ${g.source_url}`.toLowerCase().includes(q)
+  )
 })
 
 const deleteMutation = useMutation({
@@ -57,16 +46,9 @@ const deleteMutation = useMutation({
   },
 })
 const updateGroupMutation = useMutation({
-  mutationFn: ({ id, group }: { id: string, group: { name: string, source_url: string, auto_delete_unavailable: boolean, random_enabled: boolean, random_limit?: number | null } }) =>
+  mutationFn: ({ id, group }: { id: string, group: { name: string, source_url: string, random_enabled: boolean, random_limit?: number | null } }) =>
     updateGroup(id, group),
   onSuccess: () => queryClient.invalidateQueries({ queryKey: ['groups'] }),
-})
-const deleteUnavailableMutation = useMutation({
-  mutationFn: (groupID: string) => deleteUnavailableGroupNodes(groupID),
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ['nodes'] })
-    queryClient.invalidateQueries({ queryKey: ['groups'] })
-  },
 })
 const deleteGroupMutation = useMutation({
   mutationFn: (groupId: string) => deleteGroup(groupId),
@@ -76,8 +58,8 @@ const deleteGroupMutation = useMutation({
   },
 })
 const editGroupMutation = useMutation({
-  mutationFn: ({ id, name, source_url, auto_delete_unavailable, random_enabled, random_limit }: { id: string, name: string, source_url: string, auto_delete_unavailable: boolean, random_enabled: boolean, random_limit?: number | null }) =>
-    updateGroup(id, { name, source_url, auto_delete_unavailable, random_enabled, random_limit }),
+  mutationFn: ({ id, name, source_url, random_enabled, random_limit }: { id: string, name: string, source_url: string, random_enabled: boolean, random_limit?: number | null }) =>
+    updateGroup(id, { name, source_url, random_enabled, random_limit }),
   onSuccess: () => queryClient.invalidateQueries({ queryKey: ['groups'] }),
 })
 function stateForGroup(groupID: string) {
@@ -141,51 +123,11 @@ function removeNode(node: Node) {
     },
   })
 }
-function retryNode(_payload: { node: Node, mode: 'normal' | 'fast', probeURL?: string }) {}
 function handleAddNode(groupId: string) {
   emit('addNode', groupId)
 }
 function handleMoveNode(payload: { node: Node, targetGroupId: string }) {
   emit('moveNode', payload)
-}
-function deleteUnavailable(group: Group) {
-  if (!confirm(`Delete all unavailable nodes in ${group.name}?`)) return
-  const next = new Set(cleanupGroupIDs.value)
-  next.add(group.id)
-  cleanupGroupIDs.value = next
-  deleteUnavailableMutation.mutate(group.id, {
-    onSettled: () => {
-      const current = new Set(cleanupGroupIDs.value)
-      current.delete(group.id)
-      cleanupGroupIDs.value = current
-    },
-  })
-}
-function probeUnavailable(_group: Group, _options: { statuses: Array<'healthy' | 'unhealthy' | 'unknown'>, mode: 'normal' | 'fast', probeURL?: string }) {}
-function canProbeUnavailable(_group: Group): boolean { return false }
-function toggleAutoDelete(group: Group, checked: boolean) {
-  const next = new Set(togglingAutoDeleteGroupIDs.value)
-  next.add(group.id)
-  togglingAutoDeleteGroupIDs.value = next
-  updateGroupMutation.mutate({
-    id: group.id,
-    group: {
-      name: group.name,
-      source_url: group.source_url ?? '',
-      auto_delete_unavailable: checked,
-      random_enabled: group.random_enabled ?? false,
-      random_limit: group.random_limit,
-    },
-  }, {
-    onSettled: () => {
-      const current = new Set(togglingAutoDeleteGroupIDs.value)
-      current.delete(group.id)
-      togglingAutoDeleteGroupIDs.value = current
-    },
-  })
-}
-function deletedUnavailableCount(groupID: string): number {
-  return stateForGroup(groupID).deletedUnavailableCount.value
 }
 function nodeSyncError(groupID: string, nodeID: string): string {
   return stateForGroup(groupID).syncingNodes.value.get(nodeID)?.error ?? ''
@@ -201,7 +143,6 @@ function handleEditGroup(group: { id: string, name: string, source_url: string, 
     id: group.id,
     name: group.name,
     source_url: group.source_url,
-    auto_delete_unavailable: existingGroup.auto_delete_unavailable ?? false,
     random_enabled: group.random_enabled,
     random_limit: group.random_limit,
   }, {
@@ -223,12 +164,6 @@ function handleDeleteGroup(groupId: string) {
       deletingGroupIDs.value = current
     },
   })
-}
-
-function nodeProbeState(groupID: string, nodeID: string) {
-  void groupID
-  void nodeID
-  return null
 }
 
 let stopResyncOnWsOpen: (() => void) | null = null
@@ -255,9 +190,6 @@ onBeforeUnmount(() => {
       :key="group.id"
       :group="group"
       :search="props.search"
-      :status-filter="props.statusFilter"
-      :ping-filter="props.pingFilter"
-      :metrics="statusMetricsForGroup(group.id)"
       @add-node="handleAddNode"
       @move-node="handleMoveNode"
       @toggle-selection="emit('toggleSelection', $event)"
@@ -273,23 +205,12 @@ onBeforeUnmount(() => {
       :sync-total-count="syncTotalCount(group)"
       :sync-interrupted="syncInterrupted(group)"
       :sync-added-count="syncAddedCount(group.id)"
-      :deleted-unavailable-count="deletedUnavailableCount(group.id)"
-      :toggling-auto-delete="togglingAutoDeleteGroupIDs.has(group.id)"
-      :cleanup-pending="cleanupGroupIDs.has(group.id)"
       :editing-group="editingGroupIDs.has(group.id)"
       :deleting-group="deletingGroupIDs.has(group.id)"
       :deleting-ids="deletingNodeIDs"
-      :probing-ids="new Set()"
-      :local-healthy="isLocalStatusActive(group.id, 'healthy')"
-      :local-unhealthy="isLocalStatusActive(group.id, 'unhealthy')"
-      :local-unknown="isLocalStatusActive(group.id, 'unknown')"
       :sync-node-error="(id: string) => nodeSyncError(group.id, id)"
-      @toggle-local-status="(status: NodeStatus, ev: Event) => toggleLocalStatus(group.id, status, ev)"
-      @clear-local-filter="(ev: Event) => clearLocalStatusFilter(group.id, ev)"
-      @toggle-auto-delete="(checked: boolean) => toggleAutoDelete(group, checked)"
       @start-sync="startSync(group)"
       @cancel-sync="cancelSync(group)"
-      @delete-unavailable="deleteUnavailable(group)"
       @remove-node="removeNode"
       @edit-group="handleEditGroup"
       @delete-group="handleDeleteGroup"

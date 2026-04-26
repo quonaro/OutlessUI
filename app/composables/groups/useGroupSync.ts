@@ -14,8 +14,7 @@ import {
 export interface SyncNodeStatus {
   node_id: string
   url: string
-  status: 'importing' | 'done' | 'unavailable' | 'error'
-  latency_ms: number
+  status: 'importing' | 'done' | 'error'
   error?: string
 }
 
@@ -35,7 +34,6 @@ export function useGroupSync(groupId: string) {
   const syncProcessed = ref(0)
   const syncAddedCount = ref(0)
   const syncedAt = ref('')
-  const deletedUnavailableCount = ref(0)
   const isCancelled = ref(false)
   const syncingNodes = shallowRef<Map<string, SyncNodeStatus>>(new Map())
 
@@ -74,7 +72,6 @@ export function useGroupSync(groupId: string) {
         node_id: ev.node_id,
         url: ev.url,
         status: ev.status,
-        latency_ms: ev.latency_ms,
         error: ev.error,
       })
       syncingNodes.value = next
@@ -92,14 +89,12 @@ export function useGroupSync(groupId: string) {
       if (typeof ev.added_count === 'number') syncAddedCount.value = ev.added_count
       if (ev.error) error.value = ev.error
       if (ev.synced_at) syncedAt.value = ev.synced_at
-      if (typeof ev.deleted_unavailable_count === 'number') deletedUnavailableCount.value = ev.deleted_unavailable_count
       const next = new Map<string, SyncNodeStatus>()
       for (const node of ev.nodes ?? []) {
         next.set(node.node_id, {
           node_id: node.node_id,
           url: node.url,
           status: node.status,
-          latency_ms: node.latency_ms,
           error: node.error,
         })
       }
@@ -113,7 +108,6 @@ export function useGroupSync(groupId: string) {
       const ev = msg as unknown as GroupSyncDoneEvent & { group_id?: string }
       if (ev.group_id && ev.group_id !== groupId) return
       syncedAt.value = ev.synced_at
-      deletedUnavailableCount.value = ev.deleted_unavailable_count ?? 0
       if (typeof ev.total === 'number') syncTotal.value = ev.total
       if (typeof ev.processed === 'number') syncProcessed.value = ev.processed
       if (typeof ev.added_count === 'number') syncAddedCount.value = ev.added_count
@@ -154,7 +148,6 @@ export function useGroupSync(groupId: string) {
     syncTotal.value = 0
     syncAddedCount.value = 0
     syncedAt.value = ''
-    deletedUnavailableCount.value = 0
     syncingNodes.value = new Map()
 
     ensureSubscribed()
@@ -186,7 +179,6 @@ export function useGroupSync(groupId: string) {
     syncProcessed,
     syncAddedCount,
     syncedAt,
-    deletedUnavailableCount,
     syncingNodes,
     startSync,
     requestSyncState,

@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Group } from '~/utils/schemas/group'
-import type { Node, NodeStatus } from '~/utils/schemas/node'
-import type { GroupStatusCounts } from '~/composables/groups/useGroupAccordionFilters'
+import type { Node } from '~/utils/schemas/node'
 import { useGroupNodesInfinite } from '~/composables/nodes/useGroupNodesInfinite'
 import UiButton from '~/components/ui/button/button.vue'
 import UiCard from '~/components/ui/card/card.vue'
 import CardContent from '~/components/ui/card/CardContent.vue'
-import { countryBadgeLabel, normalizeCountryCode } from '~/utils/country'
+import { countryBadgeLabel } from '~/utils/country'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,15 +25,9 @@ import UiInput from '~/components/ui/input/input.vue'
 import UiLabel from '~/components/ui/label/label.vue'
 import { ArrowRight, Copy, MoreHorizontal, Plus, Pencil, Trash2 } from 'lucide-vue-next'
 
-type PingFilter = 'all' | 'good' | 'ok' | 'bad'
-type StatusFilter = 'all' | 'healthy' | 'unhealthy' | 'unknown'
-
 const props = withDefaults(defineProps<{
   group: Group
   search: string
-  statusFilter: StatusFilter
-  pingFilter: PingFilter
-  metrics: GroupStatusCounts
   isSyncing: boolean
   isCancelled: boolean
   syncError: string
@@ -43,29 +36,18 @@ const props = withDefaults(defineProps<{
   syncTotalCount: number
   syncInterrupted: boolean
   syncAddedCount: number
-  deletedUnavailableCount: number
-  togglingAutoDelete: boolean
-  cleanupPending: boolean
   deletingIds: Set<string>
-  probingIds: Set<string>
   movingIds: Set<string>
   selectedIds: Set<string>
   allGroups: Group[]
-  localHealthy: boolean
-  localUnhealthy: boolean
-  localUnknown: boolean
   syncNodeError: (nodeId: string) => string
   editingGroup: boolean
   deletingGroup: boolean
 }>(), { allGroups: () => [] })
 
 const emit = defineEmits<{
-  toggleLocalStatus: [status: NodeStatus, ev: Event]
-  clearLocalFilter: [ev: Event]
-  toggleAutoDelete: [checked: boolean]
   startSync: []
   cancelSync: []
-  deleteUnavailable: []
   removeNode: [node: Node]
   editGroup: [group: { id: string, name: string, source_url: string, random_enabled: boolean, random_limit: number | null }]
   deleteGroup: [groupId: string]
@@ -81,8 +63,6 @@ const copiedNodeIDs = ref<Set<string>>(new Set())
 const moveNodeDialogOpen = ref(false)
 const moveNodeTarget = ref<Node | null>(null)
 const moveTargetGroupId = ref('')
-const bulkMoveDialogOpen = ref(false)
-const bulkMoveTargetGroupId = ref('')
 const accordionOpen = ref(false)
 const editDialogOpen = ref(false)
 const deleteDialogOpen = ref(false)
@@ -113,44 +93,15 @@ const allNodesInGroup = computed(() =>
   nodePages.value?.pages.flatMap((p) => p.nodes) ?? [],
 )
 
-function statusSortRank(status: NodeStatus): number {
-  if (status === 'healthy') return 0
-  if (status === 'unknown') return 1
-  return 2
-}
-
-function matchesPingFilter(latencyMS: number, filter: PingFilter): boolean {
-  if (filter === 'good') return latencyMS < 100
-  if (filter === 'ok') return latencyMS >= 100 && latencyMS <= 200
-  if (filter === 'bad') return latencyMS > 200
-  return true
-}
-
-const localStatusSelection = computed<NodeStatus[]>(() => {
-  const s: NodeStatus[] = []
-  if (props.localHealthy) s.push('healthy')
-  if (props.localUnhealthy) s.push('unhealthy')
-  if (props.localUnknown) s.push('unknown')
-  return s
-})
-
 const displayNodes = computed(() => {
   let list = allNodesInGroup.value
-  if (props.statusFilter !== 'all') {
-    list = list.filter((n) => n.status === props.statusFilter)
-  }
   const q = props.search.trim().toLowerCase()
   if (q) {
     list = list.filter((n) =>
       `${n.url} ${n.id} ${n.country}`.toLowerCase().includes(q),
     )
   }
-  list = list.filter((n) => matchesPingFilter(n.latency_ms, props.pingFilter))
-  const ls = localStatusSelection.value
-  if (ls.length > 0) {
-    list = list.filter((n) => ls.includes(n.status))
-  }
-  return [...list].sort((a, b) => statusSortRank(a.status) - statusSortRank(b.status))
+  return list
 })
 
 const scrollRoot = ref<HTMLElement | null>(null)
@@ -188,27 +139,6 @@ onBeforeUnmount(() => {
   listObserver = null
 })
 
-function statusChipClass(status: NodeStatus, active: boolean): string {
-  const base = 'rounded-full border px-2 py-0.5 text-xs font-medium transition-colors'
-  const activeRing = active ? 'ring-2 ring-offset-1 ring-offset-background ring-primary' : ''
-  if (status === 'healthy') return `${base} ${activeRing} border-emerald-500/40 bg-emerald-500/15 text-emerald-700`
-  if (status === 'unhealthy') return `${base} ${activeRing} border-red-500/40 bg-red-500/15 text-red-700`
-  return `${base} ${activeRing} border-amber-500/40 bg-amber-500/15 text-amber-700`
-}
-
-function totalChipClass(): string {
-  return 'rounded-full border border-border/80 bg-background/90 px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground'
-}
-
-function isUnavailable(status: Node['status']): boolean {
-  return status === 'unknown' || status === 'unhealthy'
-}
-
-function latencyBadgeClass(latencyMS: number): string {
-  if (latencyMS < 100) return 'border-emerald-500/40 bg-emerald-500/15 text-emerald-700'
-  if (latencyMS <= 200) return 'border-amber-500/40 bg-amber-500/15 text-amber-700'
-  return 'border-red-500/40 bg-red-500/15 text-red-700'
-}
 
 async function copyNodeURL(node: Node) {
   await navigator.clipboard.writeText(node.url)
@@ -301,20 +231,6 @@ function handleDuplicateNode() {
             <p class="truncate min-w-0">
               {{ props.group.source_url || 'Manual group' }}
             </p>
-            <span class="flex items-center gap-2 shrink-0">
-              <span class="flex items-center gap-1">
-                <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
-                {{ props.metrics.healthy }}
-              </span>
-              <span class="flex items-center gap-1">
-                <span class="h-2 w-2 rounded-full bg-red-500"></span>
-                {{ props.metrics.unhealthy }}
-              </span>
-              <span class="flex items-center gap-1">
-                <span class="h-2 w-2 rounded-full bg-amber-500"></span>
-                {{ props.metrics.unknown }}
-              </span>
-            </span>
             <span v-if="props.group.last_synced_at" class="shrink-0"> · Last sync: {{ new Date(props.group.last_synced_at).toLocaleString() }}</span>
           </div>
         </div>
@@ -332,17 +248,6 @@ function handleDuplicateNode() {
               <DropdownMenuItem @click.prevent="openEditDialog" :disabled="props.editingGroup">
                 <Pencil class="mr-2 h-4 w-4" />
                 Edit
-              </DropdownMenuItem>
-              <DropdownMenuItem @click.prevent="emit('toggleAutoDelete', !props.group.auto_delete_unavailable)" :disabled="props.togglingAutoDelete">
-                <span class="mr-2 h-4 w-4 flex items-center justify-center">
-                  <span v-if="props.group.auto_delete_unavailable" class="h-3 w-3 rounded-full bg-emerald-500"></span>
-                  <span v-else class="h-3 w-3 rounded-full border border-gray-400"></span>
-                </span>
-                Auto-delete unavailable
-              </DropdownMenuItem>
-              <DropdownMenuItem @click.prevent="emit('deleteUnavailable')" :disabled="props.cleanupPending">
-                <Trash2 class="mr-2 h-4 w-4" />
-                Delete unavailable
               </DropdownMenuItem>
               <DropdownMenuItem class="text-destructive focus:text-destructive" @click.prevent="openDeleteDialog" :disabled="props.deletingGroup">
                 <Trash2 class="mr-2 h-4 w-4" />
@@ -368,11 +273,8 @@ function handleDuplicateNode() {
 
 
     <CardContent class="border-t px-0 py-0">
-      <div v-if="props.isCancelled || props.deletedUnavailableCount > 0" class="flex flex-wrap items-center gap-2 px-4 pt-3">
-        <p v-if="props.isCancelled" class="text-xs text-amber-600">Sync cancelled</p>
-        <p v-else-if="props.deletedUnavailableCount > 0" class="text-xs text-muted-foreground">
-          Auto-deleted: {{ props.deletedUnavailableCount }}
-        </p>
+      <div v-if="props.isCancelled" class="flex flex-wrap items-center gap-2 px-4 pt-3">
+        <p class="text-xs text-amber-600">Sync cancelled</p>
       </div>
 
       <p v-if="props.syncError" class="px-4 pt-2 text-xs text-red-500">
@@ -388,11 +290,6 @@ function handleDuplicateNode() {
             v-for="node in displayNodes"
             :key="node.id"
             class="px-3 py-2"
-            :class="props.probingIds.has(node.id)
-              ? 'border-blue-400/60 bg-blue-500/5'
-              : isUnavailable(node.status)
-                ? 'border-red-400/60 bg-red-500/5'
-                : ''"
           >
             <CardContent class="p-0">
               <div class="flex items-center gap-2">
@@ -416,34 +313,12 @@ function handleDuplicateNode() {
                   </p>
                   <p class="mt-1 text-xs">
                     <span
-                      class="rounded px-1.5 py-0.5"
-                      :class="node.status === 'healthy'
-                        ? 'bg-emerald-500/15 text-emerald-700'
-                        : node.status === 'unhealthy'
-                          ? 'bg-red-500/15 text-red-700'
-                          : 'bg-amber-500/15 text-amber-700'"
-                    >
-                      {{ node.status }}
-                    </span>
-                    <span
-                      class="ml-2 inline-flex rounded-full border px-2 py-0.5 text-xs font-medium tabular-nums"
-                      :class="latencyBadgeClass(node.latency_ms)"
-                    >
-                      {{ node.latency_ms }} ms
-                    </span>
-                    <span
                       class="ml-2 inline-flex items-center rounded-full border border-border/80 bg-muted/35 px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground"
                     >
                       {{ countryBadgeLabel(node.country) }}
                     </span>
                     <span v-if="props.syncNodeError(node.id)" class="ml-2 text-red-600">
                       {{ props.syncNodeError(node.id) }}
-                    </span>
-                    <span
-                      v-else-if="props.probingIds.has(node.id)"
-                      class="ml-2 rounded border border-blue-500/40 bg-blue-500/10 px-1.5 py-0.5 text-blue-700"
-                    >
-                      Checking
                     </span>
                   </p>
                 </div>

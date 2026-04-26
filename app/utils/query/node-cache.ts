@@ -3,8 +3,6 @@ import type { Node } from '~/utils/schemas/node'
 
 type NodePatch = {
   id: string
-  status?: Node['status']
-  latency_ms?: number
   country?: string
 }
 
@@ -16,8 +14,6 @@ function applyPatch(node: Node, patch: NodePatch): Node {
   if (node.id !== patch.id) return node
   return {
     ...node,
-    ...(patch.status != null ? { status: patch.status } : {}),
-    ...(patch.latency_ms != null ? { latency_ms: patch.latency_ms } : {}),
     ...(patch.country != null ? { country: patch.country } : {}),
   }
 }
@@ -110,7 +106,7 @@ function flushPatchBatch() {
 }
 
 /**
- * Coalesces node patches across probe progress events so one TanStack write runs per animation frame
+ * Coalesces node patches so one TanStack write runs per animation frame
  * (avoids O(nodes × pages) work per WebSocket message and main-thread stalls).
  */
 export function schedulePatchNodeInAllNodeQueries(queryClient: QueryClient, patch: NodePatch) {
