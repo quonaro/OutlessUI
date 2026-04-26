@@ -12,18 +12,16 @@ import CardTitle from '~/components/ui/card/CardTitle.vue'
 import CardContent from '~/components/ui/card/CardContent.vue'
 import CardFooter from '~/components/ui/card/CardFooter.vue'
 
-const config = useRuntimeConfig()
-const baseURL = config.public.apiBase as string
 const queryClient = useQueryClient()
 
 const { data: sources, isLoading } = useQuery({
   queryKey: ['public-sources'],
-  queryFn: () => fetchPublicSources(baseURL),
+  queryFn: () => fetchPublicSources(),
 })
 
 const { data: groups } = useQuery({
   queryKey: ['groups'],
-  queryFn: () => fetchGroups(baseURL),
+  queryFn: () => fetchGroups(),
 })
 
 const showCreateDialog = ref(false)
@@ -35,7 +33,7 @@ const isCreateSubmitting = ref(false)
 const isEditSubmitting = ref(false)
 
 const createMutation = useMutation({
-  mutationFn: (data: CreatePublicSource) => createPublicSource(data, baseURL),
+  mutationFn: (data: CreatePublicSource) => createPublicSource(data),
   onSuccess: () => {
     showCreateDialog.value = false
     resetCreateForm()
@@ -45,7 +43,7 @@ const createMutation = useMutation({
 
 const updateMutation = useMutation({
   mutationFn: ({ id, data }: { id: string; data: UpdatePublicSource }) =>
-    updatePublicSource(id, data, baseURL),
+    updatePublicSource(id, data),
   onSuccess: () => {
     showEditDialog.value = false
     resetEditForm()
@@ -54,14 +52,14 @@ const updateMutation = useMutation({
 })
 
 const deleteMutation = useMutation({
-  mutationFn: (id: string) => deletePublicSource(id, baseURL),
+  mutationFn: (id: string) => deletePublicSource(id),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['public-sources'] })
   },
 })
 
 const syncMutation = useMutation({
-  mutationFn: (id: string) => syncPublicSource(id, baseURL),
+  mutationFn: (id: string) => syncPublicSource(id),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['public-sources'] })
   },

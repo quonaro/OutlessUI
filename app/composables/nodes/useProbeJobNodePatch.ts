@@ -6,12 +6,12 @@ interface TrackProbeJobOptions {
   onFinish?: () => void
 }
 
-export function useProbeJobNodePatch(baseURL: string) {
+export function useProbeJobNodePatch() {
   const queryClient = useQueryClient()
   const pollers = new Map<string, { timer: ReturnType<typeof setInterval>, onFinish?: () => void }>()
 
   async function patchNode(nodeID: string) {
-    const updated = await fetchNodeByID(nodeID, baseURL)
+    const updated = await fetchNodeByID(nodeID)
     patchNodeInAllNodeQueries(queryClient, {
       id: updated.id,
       status: updated.status,
@@ -53,7 +53,7 @@ export function useProbeJobNodePatch(baseURL: string) {
     const poll = async () => {
       attempts += 1
       try {
-        const job = await fetchProbeJobStatus(jobID, baseURL)
+        const job = await fetchProbeJobStatus(jobID)
         if (job.status === 'succeeded' || job.status === 'failed') {
           await finishWithPatch(nodeID || job.nodeID)
           return

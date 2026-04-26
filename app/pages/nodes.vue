@@ -41,9 +41,7 @@ interface PublicRefreshStateMessage {
 }
 
 const queryClient = useQueryClient()
-const config = useRuntimeConfig()
-const baseURL = config.public.apiBase as string
-const { trackProbeJob, stopAllPolling } = useProbeJobNodePatch(baseURL)
+const { trackProbeJob, stopAllPolling } = useProbeJobNodePatch()
 const viewMode = ref<ViewMode>('grouped')
 
 const {
@@ -99,7 +97,7 @@ const bulkMoveDialogOpen = ref(false)
 const bulkMoveTargetGroupId = ref('')
 
 const createGroupMutation = useMutation({
-  mutationFn: (payload: { name: string; source_url: string; random_enabled: boolean; random_limit: number | null }) => createGroup({ ...payload, auto_delete_unavailable: false }, baseURL),
+  mutationFn: (payload: { name: string; source_url: string; random_enabled: boolean; random_limit: number | null }) => createGroup({ ...payload, auto_delete_unavailable: false }),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['groups'] })
     showCreateGroupDialog.value = false
@@ -111,7 +109,7 @@ const createGroupMutation = useMutation({
 })
 
 const createNodeMutation = useMutation({
-  mutationFn: (payload: { url: string; group_id: string }) => createNode(payload, baseURL),
+  mutationFn: (payload: { url: string; group_id: string }) => createNode(payload),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['nodes'] })
     queryClient.invalidateQueries({ queryKey: ['groups'] })
@@ -123,7 +121,7 @@ const createNodeMutation = useMutation({
 })
 
 const deleteNodeMutation = useMutation({
-  mutationFn: (id: string) => deleteNode(id, baseURL),
+  mutationFn: (id: string) => deleteNode(id),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['nodes'] })
     queryClient.invalidateQueries({ queryKey: ['groups'] })
@@ -179,7 +177,7 @@ function formatCountdown(totalMS: number): string {
 }
 
 const probeNodeMutation = useMutation({
-  mutationFn: ({ id, mode, probeURL }: { id: string, mode: 'normal' | 'fast', probeURL?: string }) => probeNode(id, baseURL, mode, probeURL),
+  mutationFn: ({ id, mode, probeURL }: { id: string, mode: 'normal' | 'fast', probeURL?: string }) => probeNode(id, mode, probeURL),
   onSuccess: (result, variables) => {
     const targetNodeID = result.nodeID || variables.id
     if (result.jobID) {
@@ -291,7 +289,7 @@ function handleMoveNode(payload: { node: Node, targetGroupId: string }) {
   const next = new Set(movingNodeIDs.value)
   next.add(payload.node.id)
   movingNodeIDs.value = next
-  updateNode(payload.node.id, { url: payload.node.url, group_id: payload.targetGroupId }, baseURL)
+  updateNode(payload.node.id, { url: payload.node.url, group_id: payload.targetGroupId })
     .then(() => {
       queryClient.invalidateQueries({ queryKey: ['nodes'] })
       queryClient.invalidateQueries({ queryKey: ['groups'] })
@@ -320,7 +318,7 @@ function openBulkMoveDialog() {
 
 function handleBulkMove() {
   const promises = Array.from(selectedNodeIDs.value).map(nodeId =>
-    updateNode(nodeId, { url: '', group_id: bulkMoveTargetGroupId.value }, baseURL)
+    updateNode(nodeId, { url: '', group_id: bulkMoveTargetGroupId.value })
   )
   Promise.all(promises)
     .then(() => {
@@ -333,7 +331,7 @@ function handleBulkMove() {
 
 function handleBulkDelete() {
   if (!confirm(`Delete ${selectedNodeIDs.value.size} selected nodes?`)) return
-  const promises = Array.from(selectedNodeIDs.value).map(nodeId => deleteNode(nodeId, baseURL))
+  const promises = Array.from(selectedNodeIDs.value).map(nodeId => deleteNode(nodeId))
   Promise.all(promises)
     .then(() => {
       queryClient.invalidateQueries({ queryKey: ['nodes'] })
@@ -343,7 +341,7 @@ function handleBulkDelete() {
 }
 
 function handleDuplicateNode(node: Node) {
-  createNode({ url: node.url, group_id: node.group_id }, baseURL)
+  createNode({ url: node.url, group_id: node.group_id })
     .then(() => {
       queryClient.invalidateQueries({ queryKey: ['nodes'] })
       queryClient.invalidateQueries({ queryKey: ['groups'] })

@@ -9,12 +9,9 @@ export interface UpdateNodePayload extends UpdateNode {
 export function useUpdateNode(
   options?: UseMutationOptions<void, Error, UpdateNodePayload>,
 ) {
-  const config = useRuntimeConfig()
-  const backendUrl = config.public.apiBase as string
-
   return useMutation({
     mutationFn: ({ id, ...rest }: UpdateNodePayload) =>
-      updateNode(id, rest, backendUrl),
+      updateNode(id, rest),
     ...options,
   })
 }

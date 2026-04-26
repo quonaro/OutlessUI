@@ -5,12 +5,9 @@ import type { FirstAdminStatus } from '~/utils/schemas/auth'
 export function useFirstAdminStatus(
   options?: UseQueryOptions<FirstAdminStatus, Error>
 ) {
-  const config = useRuntimeConfig()
-  const backendUrl = config.public.apiBase as string
-
   return useQuery({
     queryKey: ['first-admin-status'],
-    queryFn: () => getFirstAdminStatus(backendUrl),
+    queryFn: () => getFirstAdminStatus(),
     ...options,
   })
 }

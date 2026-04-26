@@ -3,12 +3,9 @@ import { fetchTokens } from '~/utils/services/token'
 import type { Token } from '~/utils/schemas/token'
 
 export function useTokens(options?: UseQueryOptions<Token[], Error>) {
-  const config = useRuntimeConfig()
-  const backendUrl = config.public.apiBase as string
-
   return useQuery({
     queryKey: ['tokens'],
-    queryFn: () => fetchTokens(backendUrl),
+    queryFn: () => fetchTokens(),
     ...options,
   })
 }

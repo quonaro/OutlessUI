@@ -3,6 +3,11 @@ import { ref, shallowRef, computed, watch } from 'vue'
 import {
   fetchGroupProbeUnavailableState,
   type GroupProbeUnavailableStateEvent,
+  type GroupProbeUnavailableNodeEvent,
+  type GroupProbeUnavailableDoneEvent,
+  type GroupSyncNodeEvent,
+  type GroupSyncStateEvent,
+  type GroupSyncDoneEvent,
 } from '~/utils/services/group'
 import {
   ensureAdminRealtimeConnected,
@@ -12,6 +17,7 @@ import {
 import { DEFAULT_PROBE_STATUSES, type ProbeMode, normalizeProbeStatuses, normalizeProbeMode } from '~/utils/groups/probe-utils'
 import { saveProbeStateToStorage as saveProbeStateToStorageUtil, clearProbeStateFromStorage as clearProbeStateFromStorageUtil, loadProbeStateFromStorage, type ProbeState } from '~/utils/groups/probe-storage'
 import { createWsHandler, type SyncStateRefs } from '~/utils/groups/sync-ws-handler'
+import { schedulePatchNodeInAllNodeQueries } from '~/utils/query/node-cache'
 
 export interface SyncNodeStatus {
   node_id: string
@@ -213,9 +219,8 @@ export function useGroupSync(groupId: string) {
 
   async function pullProbeUnavailableStateFromHttp() {
     if (!import.meta.client) return
-    const baseURL = runtimeConfig.public.apiBase as string
     try {
-      const ev = await fetchGroupProbeUnavailableState(groupId, baseURL)
+      const ev = await fetchGroupProbeUnavailableState(groupId)
       applyProbeUnavailableState(ev)
     }
     catch {

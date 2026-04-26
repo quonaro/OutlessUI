@@ -5,12 +5,9 @@ import type { UpdateGroup } from '~/utils/schemas/group'
 export function useUpdateGroup(
   options?: UseMutationOptions<void, Error, { id: string; group: UpdateGroup }>
 ) {
-  const config = useRuntimeConfig()
-  const backendUrl = config.public.apiBase as string
-
   return useMutation({
     mutationFn: ({ id, group }: { id: string; group: UpdateGroup }) =>
-      updateGroup(id, group, backendUrl),
+      updateGroup(id, group),
     ...options,
   })
 }

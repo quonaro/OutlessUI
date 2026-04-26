@@ -5,11 +5,8 @@ import type { CreateToken, IssuedToken } from '~/utils/schemas/token'
 export function useCreateToken(
   options?: UseMutationOptions<IssuedToken, Error, CreateToken>,
 ) {
-  const config = useRuntimeConfig()
-  const backendUrl = config.public.apiBase as string
-
   return useMutation({
-    mutationFn: (token: CreateToken) => createToken(token, backendUrl),
+    mutationFn: (token: CreateToken) => createToken(token),
     ...options,
   })
 }

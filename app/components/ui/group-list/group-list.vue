@@ -12,13 +12,11 @@ import CardTitle from '~/components/ui/card/CardTitle.vue'
 import CardContent from '~/components/ui/card/CardContent.vue'
 import CardFooter from '~/components/ui/card/CardFooter.vue'
 
-const config = useRuntimeConfig()
-const baseURL = config.public.apiBase as string
 const queryClient = useQueryClient()
 
 const { data: groups, isLoading } = useQuery({
   queryKey: ['groups'],
-  queryFn: () => fetchGroups(baseURL),
+  queryFn: () => fetchGroups(),
 })
 
 const showCreateDialog = ref(false)
@@ -30,7 +28,7 @@ const isCreateSubmitting = ref(false)
 const isEditSubmitting = ref(false)
 
 const createMutation = useMutation({
-  mutationFn: (data: CreateGroup) => createGroup(data, baseURL),
+  mutationFn: (data: CreateGroup) => createGroup(data),
   onSuccess: () => {
     showCreateDialog.value = false
     groupName.value = ''
@@ -40,7 +38,7 @@ const createMutation = useMutation({
 
 const updateMutation = useMutation({
   mutationFn: ({ id, data }: { id: string; data: UpdateGroup }) =>
-    updateGroup(id, data, baseURL),
+    updateGroup(id, data),
   onSuccess: () => {
     showEditDialog.value = false
     groupName.value = ''
@@ -50,7 +48,7 @@ const updateMutation = useMutation({
 })
 
 const deleteMutation = useMutation({
-  mutationFn: (id: string) => deleteGroup(id, baseURL),
+  mutationFn: (id: string) => deleteGroup(id),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['groups'] })
   },

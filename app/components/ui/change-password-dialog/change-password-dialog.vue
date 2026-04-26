@@ -23,9 +23,6 @@ const emit = defineEmits<{
   success: []
 }>()
 
-const config = useRuntimeConfig()
-const baseURL = config.public.apiBase as string
-
 const formData = ref<ChangeAdminPassword>({
   current_login: props.currentLogin,
   current_password: '',
@@ -37,7 +34,7 @@ const formData = ref<ChangeAdminPassword>({
 const errors = ref<Record<string, string>>({})
 
 const mutation = useMutation({
-  mutationFn: (data: ChangeAdminPassword) => changeAdminPassword(data, baseURL),
+  mutationFn: (data: ChangeAdminPassword) => changeAdminPassword(data),
   onSuccess: () => {
     emit('success')
     emit('update:open', false)

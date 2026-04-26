@@ -1,5 +1,6 @@
 import type { QueryClient } from '@tanstack/vue-query'
 import { computed, readonly, ref } from 'vue'
+import { useAuth } from '~/composables/useAuth'
 
 let queryClient: QueryClient | null = null
 let apiBase = ''
@@ -177,10 +178,23 @@ export function connectAdminRealtime() {
       /* ignore malformed */
     }
   }
-  ws.onclose = () => {
+  ws.onclose = (event) => {
     socket = null
     wsConnected.value = false
     wsConnecting.value = false
+
+    // Handle 401 Unauthorized - clear token and redirect to login
+    if (event.code === 1008 || event.code === 4000) {
+      // Policy violation or custom error code - likely auth failure
+      const auth = useAuth()
+      auth.clearToken()
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login'
+      }
+      return
+    }
+
+    // Normal close or abnormal close - reconnect if token exists
     const t = getToken()
     if (t && apiBase) {
       reconnectTimer = setTimeout(() => connectAdminRealtime(), 2000)

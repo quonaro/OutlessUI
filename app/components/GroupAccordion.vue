@@ -29,9 +29,7 @@ const emit = defineEmits<{
 }>()
 
 const queryClient = useQueryClient()
-const config = useRuntimeConfig()
-const baseURL = config.public.apiBase as string
-const { trackProbeJob, stopAllPolling } = useProbeJobNodePatch(baseURL)
+const { trackProbeJob, stopAllPolling } = useProbeJobNodePatch()
 const syncStates: Record<string, ReturnType<typeof useGroupSync>> = {}
 const deletingNodeIDs = ref<Set<string>>(new Set())
 const probingNodeIDs = ref<Set<string>>(new Set())
@@ -56,14 +54,14 @@ const {
 })
 
 const deleteMutation = useMutation({
-  mutationFn: (id: string) => deleteNode(id, baseURL),
+  mutationFn: (id: string) => deleteNode(id),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['nodes'] })
     queryClient.invalidateQueries({ queryKey: ['groups'] })
   },
 })
 const probeMutation = useMutation({
-  mutationFn: ({ id, mode, probeURL }: { id: string, mode: 'normal' | 'fast', probeURL?: string }) => probeNode(id, baseURL, mode, probeURL),
+  mutationFn: ({ id, mode, probeURL }: { id: string, mode: 'normal' | 'fast', probeURL?: string }) => probeNode(id, mode, probeURL),
   onSuccess: (result, variables) => {
     const targetNodeID = result.nodeID || variables.id
     if (result.jobID) {
@@ -88,18 +86,18 @@ const probeMutation = useMutation({
 })
 const updateGroupMutation = useMutation({
   mutationFn: ({ id, group }: { id: string, group: { name: string, source_url: string, auto_delete_unavailable: boolean, random_enabled: boolean, random_limit?: number | null } }) =>
-    updateGroup(id, group, baseURL),
+    updateGroup(id, group),
   onSuccess: () => queryClient.invalidateQueries({ queryKey: ['groups'] }),
 })
 const deleteUnavailableMutation = useMutation({
-  mutationFn: (groupID: string) => deleteUnavailableGroupNodes(groupID, baseURL),
+  mutationFn: (groupID: string) => deleteUnavailableGroupNodes(groupID),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['nodes'] })
     queryClient.invalidateQueries({ queryKey: ['groups'] })
   },
 })
 const deleteGroupMutation = useMutation({
-  mutationFn: (groupId: string) => deleteGroup(groupId, baseURL),
+  mutationFn: (groupId: string) => deleteGroup(groupId),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['groups'] })
     queryClient.invalidateQueries({ queryKey: ['nodes'] })
@@ -107,7 +105,7 @@ const deleteGroupMutation = useMutation({
 })
 const editGroupMutation = useMutation({
   mutationFn: ({ id, name, source_url, auto_delete_unavailable, random_enabled, random_limit }: { id: string, name: string, source_url: string, auto_delete_unavailable: boolean, random_enabled: boolean, random_limit?: number | null }) =>
-    updateGroup(id, { name, source_url, auto_delete_unavailable, random_enabled, random_limit }, baseURL),
+    updateGroup(id, { name, source_url, auto_delete_unavailable, random_enabled, random_limit }),
   onSuccess: () => queryClient.invalidateQueries({ queryKey: ['groups'] }),
 })
 function stateForGroup(groupID: string) {

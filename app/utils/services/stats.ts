@@ -1,9 +1,7 @@
 import { StatsSchema, type Stats } from '~/utils/schemas/stats'
-import { getAuthHeaders } from '~/utils/services/auth-header'
 
-export async function fetchStats(baseURL: string): Promise<Stats> {
-  const data = await $fetch(`${baseURL}/v1/stats`, {
-    headers: getAuthHeaders(),
-  })
+export async function fetchStats(): Promise<Stats> {
+  const { $api } = useNuxtApp()
+  const data = await $api<Stats>('/v1/stats')
   return StatsSchema.parse(data)
 }

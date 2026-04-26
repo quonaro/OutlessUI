@@ -22,9 +22,6 @@ const { handleSubmit, errors, defineField } = useForm({
 const [username] = defineField('username')
 const [password] = defineField('password')
 
-const config = useRuntimeConfig()
-const { apiBase } = config.public
-
 const auth = useAuth()
 const isBootstrapMode = ref(false)
 const isInitialLoading = ref(true)
@@ -37,8 +34,8 @@ const onSubmit = handleSubmit(async (values) => {
 
   try {
     const response = isBootstrapMode.value
-      ? await registerFirstAdmin(values, apiBase)
-      : await login(values, apiBase)
+      ? await registerFirstAdmin(values)
+      : await login(values)
     auth.setToken(response.token)
     await navigateTo('/')
   }
@@ -59,7 +56,7 @@ onMounted(async () => {
   }
 
   try {
-    const status = await getFirstAdminStatus(apiBase)
+    const status = await getFirstAdminStatus()
     isBootstrapMode.value = status.can_register
   }
   catch (error) {

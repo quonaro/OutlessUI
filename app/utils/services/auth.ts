@@ -5,23 +5,26 @@ export type LoginCredentials = z.infer<typeof LoginCredentialsSchema>
 export type AuthResponse = z.infer<typeof AuthResponseSchema>
 export type FirstAdminStatus = z.infer<typeof FirstAdminStatusSchema>
 
-export async function login(credentials: LoginCredentials, baseURL: string): Promise<AuthResponse> {
-  const data = await $fetch(`${baseURL}/v1/auth/login`, {
+export async function login(credentials: LoginCredentials): Promise<AuthResponse> {
+  const config = useRuntimeConfig()
+  const data = await $fetch(`${config.public.apiBase}/v1/auth/login`, {
     method: 'POST',
     body: credentials,
   })
   return AuthResponseSchema.parse(data)
 }
 
-export async function registerFirstAdmin(credentials: LoginCredentials, baseURL: string): Promise<AuthResponse> {
-  const data = await $fetch(`${baseURL}/v1/auth/register_first_admin`, {
+export async function registerFirstAdmin(credentials: LoginCredentials): Promise<AuthResponse> {
+  const config = useRuntimeConfig()
+  const data = await $fetch(`${config.public.apiBase}/v1/auth/register_first_admin`, {
     method: 'POST',
     body: credentials,
   })
   return AuthResponseSchema.parse(data)
 }
 
-export async function getFirstAdminStatus(baseURL: string): Promise<FirstAdminStatus> {
-  const data = await $fetch(`${baseURL}/v1/auth/register_first_admin`)
+export async function getFirstAdminStatus(): Promise<FirstAdminStatus> {
+  const config = useRuntimeConfig()
+  const data = await $fetch(`${config.public.apiBase}/v1/auth/register_first_admin`)
   return FirstAdminStatusSchema.parse(data)
 }

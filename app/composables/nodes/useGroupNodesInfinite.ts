@@ -6,9 +6,6 @@ import { fetchNodesPage, type NodesPage } from '~/utils/services/node'
 export const GROUP_NODES_PAGE_SIZE = 30
 
 export function useGroupNodesInfinite(groupId: MaybeRefOrGetter<string>) {
-  const config = useRuntimeConfig()
-  const baseURL = config.public.apiBase as string
-
   const gid = computed(() => toValue(groupId))
 
   return useInfiniteQuery<NodesPage, Error>({
@@ -16,7 +13,7 @@ export function useGroupNodesInfinite(groupId: MaybeRefOrGetter<string>) {
     initialPageParam: 0,
     enabled: computed(() => Boolean(gid.value)),
     queryFn: ({ pageParam }) =>
-      fetchNodesPage(baseURL, GROUP_NODES_PAGE_SIZE, Number(pageParam), gid.value),
+      fetchNodesPage(GROUP_NODES_PAGE_SIZE, Number(pageParam), gid.value),
     getNextPageParam: (lastPage) =>
       lastPage.hasMore && lastPage.nextOffset != null ? lastPage.nextOffset : undefined,
   })

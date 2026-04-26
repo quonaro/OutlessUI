@@ -1,57 +1,55 @@
 import { z } from 'zod'
 import { GroupSchema, CreateGroupSchema, UpdateGroupSchema, type Group, type CreateGroup, type UpdateGroup } from '~/utils/schemas/group'
-import { getAuthHeaders } from '~/utils/services/auth-header'
 
 interface ListGroupsResponse {
   groups: unknown[]
 }
 
-export async function fetchGroups(baseURL: string): Promise<Group[]> {
-  const data = await $fetch<ListGroupsResponse | unknown[]>(`${baseURL}/v1/groups`, {
-    headers: getAuthHeaders(),
-  })
+export async function fetchGroups(): Promise<Group[]> {
+  const { $api } = useNuxtApp()
+  const data = await $api<ListGroupsResponse | unknown[]>('/v1/groups')
   const groups = Array.isArray(data) ? data : data.groups
   return z.array(GroupSchema).parse(groups)
 }
 
-export async function createGroup(group: CreateGroup, baseURL: string): Promise<Group> {
+export async function createGroup(group: CreateGroup): Promise<Group> {
   const payload = CreateGroupSchema.parse(group)
-  const data = await $fetch(`${baseURL}/v1/groups`, {
+  const { $api } = useNuxtApp()
+  const data = await $api<Group>('/v1/groups', {
     method: 'POST',
     body: payload,
-    headers: getAuthHeaders(),
   })
   return GroupSchema.parse(data)
 }
 
-export async function updateGroup(id: string, group: UpdateGroup, baseURL: string): Promise<void> {
+export async function updateGroup(id: string, group: UpdateGroup): Promise<void> {
   const payload = UpdateGroupSchema.parse(group)
-  await $fetch(`${baseURL}/v1/groups/${id}`, {
+  const { $api } = useNuxtApp()
+  await $api(`/v1/groups/${id}`, {
     method: 'PUT',
     body: payload,
-    headers: getAuthHeaders(),
   })
 }
 
-export async function deleteGroup(id: string, baseURL: string): Promise<void> {
-  await $fetch(`${baseURL}/v1/groups/${id}`, {
+export async function deleteGroup(id: string): Promise<void> {
+  const { $api } = useNuxtApp()
+  await $api(`/v1/groups/${id}`, {
     method: 'DELETE',
-    headers: getAuthHeaders(),
   })
 }
 
-export async function deleteUnavailableGroupNodes(id: string, baseURL: string): Promise<number> {
-  const data = await $fetch<{ deleted?: number }>(`${baseURL}/v1/groups/${id}/nodes/delete-unavailable`, {
+export async function deleteUnavailableGroupNodes(id: string): Promise<number> {
+  const { $api } = useNuxtApp()
+  const data = await $api<{ deleted?: number }>(`/v1/groups/${id}/nodes/delete-unavailable`, {
     method: 'POST',
-    headers: getAuthHeaders(),
   })
   return typeof data.deleted === 'number' ? data.deleted : 0
 }
 
-export async function probeUnavailableGroupNodes(id: string, baseURL: string): Promise<number> {
-  const data = await $fetch<{ probed?: number }>(`${baseURL}/v1/groups/${id}/nodes/probe-unavailable`, {
+export async function probeUnavailableGroupNodes(id: string): Promise<number> {
+  const { $api } = useNuxtApp()
+  const data = await $api<{ probed?: number }>(`/v1/groups/${id}/nodes/probe-unavailable`, {
     method: 'POST',
-    headers: getAuthHeaders(),
   })
   return typeof data.probed === 'number' ? data.probed : 0
 }
@@ -133,10 +131,10 @@ export interface GroupProbeUnavailableStateEvent {
   probe_url?: string
 }
 
-export async function fetchGroupProbeUnavailableState(id: string, baseURL: string): Promise<GroupProbeUnavailableStateEvent> {
-  const data = await $fetch<{ state: GroupProbeUnavailableStateEvent | undefined }>(
-    `${baseURL}/v1/groups/${id}/probe-unavailable-state`,
-    { headers: getAuthHeaders() },
+export async function fetchGroupProbeUnavailableState(id: string): Promise<GroupProbeUnavailableStateEvent> {
+  const { $api } = useNuxtApp()
+  const data = await $api<{ state: GroupProbeUnavailableStateEvent | undefined }>(
+    `/v1/groups/${id}/probe-unavailable-state`,
   )
   const s = data.state
   if (!s) {

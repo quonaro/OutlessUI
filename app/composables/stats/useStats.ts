@@ -3,12 +3,9 @@ import { fetchStats } from '~/utils/services/stats'
 import type { Stats } from '~/utils/schemas/stats'
 
 export function useStats(options?: UseQueryOptions<Stats, Error>) {
-  const config = useRuntimeConfig()
-  const backendUrl = config.public.apiBase as string
-
   return useQuery({
     queryKey: ['stats'],
-    queryFn: () => fetchStats(backendUrl),
+    queryFn: () => fetchStats(),
     refetchInterval: 30_000,
     ...options,
   })
