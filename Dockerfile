@@ -33,10 +33,10 @@ COPY --from=builder --chown=nextjs:nodejs /src/.output ./
 
 USER nextjs
 
-EXPOSE 3000
+EXPOSE 41221
 
 ENV NODE_ENV=production
-ENV PORT=3000
+ENV PORT=41221
 ENV HOST="0.0.0.0"
 
 CMD ["node", "server/index.mjs"]
