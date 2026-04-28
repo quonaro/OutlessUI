@@ -21,8 +21,7 @@ const cards = computed<StatCard[]>(() => {
   const s = stats.value
   if (!s) return []
   return [
-    { label: 'Total nodes', value: s.nodes_total, hint: `${s.nodes_healthy} healthy / ${s.nodes_unhealthy} unhealthy` },
-    { label: 'Healthy nodes', value: s.nodes_healthy },
+    { label: 'Total nodes', value: s.nodes_total },
     { label: 'Active tokens', value: s.tokens_active, hint: `${s.tokens_total} total` },
     { label: 'Groups', value: s.groups_total },
   ]
