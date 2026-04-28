@@ -40,9 +40,15 @@ const createMutation = useCreateNode({
     invalidate()
   },
   onError: (err) => {
-    toast.error('Ошибка создания ноды', {
-      description: err.message,
-    })
+    if (err.message.includes('duplicate key') || err.message.includes('already exists')) {
+      toast.error('Ошибка создания ноды', {
+        description: 'Нода с таким URL уже существует',
+      })
+    } else {
+      toast.error('Ошибка создания ноды', {
+        description: err.message,
+      })
+    }
   },
 })
 
@@ -139,7 +145,7 @@ function handleCreate() {
 }
 
 function handleUpdate() {
-  if (!selectedNode.value || !nodeUrl.value.trim() || isEditSubmitting.value) return
+  if (!selectedNode.value || !nodeUrl.value.trim() || !nodeGroupId.value || isEditSubmitting.value) return
   const payload: UpdateNode = {
     url: nodeUrl.value.trim(),
     group_id: nodeGroupId.value,
@@ -168,7 +174,6 @@ function handleDelete(node: Node) {
           class="rounded-md border bg-background px-3 py-2 text-sm"
         >
           <option value="">All groups</option>
-          <option value="__ungrouped__">No group</option>
           <option v-for="g in groups ?? []" :key="g.id" :value="g.id">
             {{ g.name }}
           </option>
@@ -204,7 +209,7 @@ function handleDelete(node: Node) {
             <p class="text-xs text-muted-foreground">
               Group:
               <span class="font-medium">
-                {{ groupNameById[node.group_id] ?? (node.group_id || 'All groups') }}
+                {{ groupNameById[node.group_id] ?? node.group_id }}
               </span>
               · ID: {{ node.id }}
             </p>
@@ -245,12 +250,11 @@ function handleDelete(node: Node) {
             />
           </div>
           <div class="space-y-2">
-            <label class="text-sm font-medium">Group</label>
+            <label class="text-sm font-medium">Group *</label>
             <select
               v-model="nodeGroupId"
               class="w-full rounded-md border bg-background px-3 py-2 text-sm"
             >
-              <option value="">No group</option>
               <option v-for="g in groups ?? []" :key="g.id" :value="g.id">
                 {{ g.name }}
               </option>
@@ -262,7 +266,7 @@ function handleDelete(node: Node) {
             Cancel
           </UiButton>
           <UiButton
-            :disabled="!nodeUrl.trim() || isCreateSubmitting"
+            :disabled="!nodeUrl.trim() || !nodeGroupId || isCreateSubmitting"
             @click="handleCreate"
           >
             {{ isCreateSubmitting ? 'Adding...' : 'Add' }}
@@ -285,12 +289,11 @@ function handleDelete(node: Node) {
             <UiInput v-model="nodeUrl" @keyup.enter="handleUpdate" />
           </div>
           <div class="space-y-2">
-            <label class="text-sm font-medium">Group</label>
+            <label class="text-sm font-medium">Group *</label>
             <select
               v-model="nodeGroupId"
               class="w-full rounded-md border bg-background px-3 py-2 text-sm"
             >
-              <option value="">No group</option>
               <option v-for="g in groups ?? []" :key="g.id" :value="g.id">
                 {{ g.name }}
               </option>
