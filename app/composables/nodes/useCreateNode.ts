@@ -9,10 +9,10 @@ export function useCreateNode(
   return useMutation({
     mutationFn: (payload: CreateNode) => createNode(payload),
     onSuccess: () => {
-      toast.success('Нода успешно создана')
+      toast.success('Node created successfully')
     },
     onError: (err) => {
-      toast.error('Ошибка создания ноды', {
+      toast.error('Failed to create node', {
         description: err.message,
       })
     },

@@ -14,10 +14,10 @@ export function useUpdateNode(
     mutationFn: ({ id, ...rest }: UpdateNodePayload) =>
       updateNode(id, rest),
     onSuccess: () => {
-      toast.success('Нода успешно обновлена')
+      toast.success('Node updated successfully')
     },
     onError: (err) => {
-      toast.error('Ошибка обновления ноды', {
+      toast.error('Failed to update node', {
         description: err.message,
       })
     },

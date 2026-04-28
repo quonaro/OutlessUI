@@ -10,10 +10,10 @@ export function useLogin(
     mutationFn: (credentials: LoginCredentials) =>
       login(credentials),
     onSuccess: () => {
-      toast.success('Успешный вход в систему')
+      toast.success('Login successful')
     },
     onError: (err) => {
-      toast.error('Ошибка входа', {
+      toast.error('Login failed', {
         description: err.message,
       })
     },

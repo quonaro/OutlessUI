@@ -9,10 +9,10 @@ export function useCreateToken(
   return useMutation({
     mutationFn: (token: CreateToken) => createToken(token),
     onSuccess: () => {
-      toast.success('Токен успешно создан')
+      toast.success('Token created successfully')
     },
     onError: (err) => {
-      toast.error('Ошибка создания токена', {
+      toast.error('Failed to create token', {
         description: err.message,
       })
     },

@@ -8,10 +8,10 @@ export function useDeletePublicSource(
   return useMutation({
     mutationFn: (id: string) => deletePublicSource(id),
     onSuccess: () => {
-      toast.success('Public source успешно удален')
+      toast.success('Public source deleted successfully')
     },
     onError: (err) => {
-      toast.error('Ошибка удаления public source', {
+      toast.error('Failed to delete public source', {
         description: err.message,
       })
     },

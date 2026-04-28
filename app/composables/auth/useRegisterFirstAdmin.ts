@@ -10,10 +10,10 @@ export function useRegisterFirstAdmin(
     mutationFn: (credentials: LoginCredentials) =>
       registerFirstAdmin(credentials),
     onSuccess: () => {
-      toast.success('Админ успешно зарегистрирован')
+      toast.success('Admin registered successfully')
     },
     onError: (err) => {
-      toast.error('Ошибка регистрации админа', {
+      toast.error('Failed to register admin', {
         description: err.message,
       })
     },

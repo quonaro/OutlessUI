@@ -8,10 +8,10 @@ export function useDeleteToken(
   return useMutation({
     mutationFn: (id: string) => deactivateToken(id),
     onSuccess: () => {
-      toast.success('Токен успешно деактивирован')
+      toast.success('Token deactivated successfully')
     },
     onError: (err) => {
-      toast.error('Ошибка деактивации токена', {
+      toast.error('Failed to deactivate token', {
         description: err.message,
       })
     },

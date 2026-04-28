@@ -34,18 +34,18 @@ const invalidate = () => queryClient.invalidateQueries({ queryKey: ['nodes'] })
 
 const createMutation = useCreateNode({
   onSuccess: () => {
-    toast.success('Нода успешно создана')
+    toast.success('Node created successfully')
     showCreateDialog.value = false
     resetForm()
     invalidate()
   },
   onError: (err) => {
     if (err.message.includes('duplicate key') || err.message.includes('already exists')) {
-      toast.error('Ошибка создания ноды', {
-        description: 'Нода с таким URL уже существует',
+      toast.error('Failed to create node', {
+        description: 'Node with this URL already exists',
       })
     } else {
-      toast.error('Ошибка создания ноды', {
+      toast.error('Failed to create node', {
         description: err.message,
       })
     }
@@ -54,13 +54,13 @@ const createMutation = useCreateNode({
 
 const updateMutation = useUpdateNode({
   onSuccess: () => {
-    toast.success('Нода успешно обновлена')
+    toast.success('Node updated successfully')
     showEditDialog.value = false
     resetForm()
     invalidate()
   },
   onError: (err) => {
-    toast.error('Ошибка обновления ноды', {
+    toast.error('Failed to update node', {
       description: err.message,
     })
   },
@@ -68,11 +68,11 @@ const updateMutation = useUpdateNode({
 
 const deleteMutation = useDeleteNode({
   onSuccess: () => {
-    toast.success('Нода успешно удалена')
+    toast.success('Node deleted successfully')
     invalidate()
   },
   onError: (err) => {
-    toast.error('Ошибка удаления ноды', {
+    toast.error('Failed to delete node', {
       description: err.message,
     })
   },

@@ -8,10 +8,10 @@ export function useDeleteGroup(
   return useMutation({
     mutationFn: (id: string) => deleteGroup(id),
     onSuccess: () => {
-      toast.success('Группа успешно удалена')
+      toast.success('Group deleted successfully')
     },
     onError: (err) => {
-      toast.error('Ошибка удаления группы', {
+      toast.error('Failed to delete group', {
         description: err.message,
       })
     },

@@ -8,10 +8,10 @@ export function useDeleteNode(
   return useMutation({
     mutationFn: (id: string) => deleteNode(id),
     onSuccess: () => {
-      toast.success('Нода успешно удалена')
+      toast.success('Node deleted successfully')
     },
     onError: (err) => {
-      toast.error('Ошибка удаления ноды', {
+      toast.error('Failed to delete node', {
         description: err.message,
       })
     },

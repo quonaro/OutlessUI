@@ -8,10 +8,10 @@ export function useRemoveToken(
   return useMutation({
     mutationFn: (id: string) => removeToken(id),
     onSuccess: () => {
-      toast.success('Токен успешно удален')
+      toast.success('Token removed successfully')
     },
     onError: (err) => {
-      toast.error('Ошибка удаления токена', {
+      toast.error('Failed to remove token', {
         description: err.message,
       })
     },

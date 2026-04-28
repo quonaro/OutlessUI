@@ -9,10 +9,10 @@ export function useCreateGroup(
   return useMutation({
     mutationFn: (group: CreateGroup) => createGroup(group),
     onSuccess: () => {
-      toast.success('Группа успешно создана')
+      toast.success('Group created successfully')
     },
     onError: (err) => {
-      toast.error('Ошибка создания группы', {
+      toast.error('Failed to create group', {
         description: err.message,
       })
     },

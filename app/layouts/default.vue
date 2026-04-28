@@ -1,8 +1,21 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useColorMode } from '@vueuse/core'
 import Sidebar from '~/components/Sidebar.vue'
 import { Toaster } from 'vue-sonner'
 
-const colorMode = useColorMode()
+const colorMode = useColorMode({ emitAuto: true })
+
+const toasterTheme = computed<'light' | 'dark'>(() => {
+  // 'auto' means system preference, check actual dark class on html
+  if (colorMode.value === 'dark') return 'dark'
+  if (colorMode.value === 'light') return 'light'
+  // auto - check what actually rendered on client, fallback to light on server
+  if (typeof document !== 'undefined') {
+    return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+  }
+  return 'light'
+})
 </script>
 
 <template>
@@ -17,8 +30,14 @@ const colorMode = useColorMode()
     </div>
   </div>
   <Toaster
-    richColors
     position="top-right"
-    :theme="colorMode.value as 'light' | 'dark' | undefined"
+    :theme="toasterTheme"
+    :toast-options="{
+      style: {
+        background: 'hsl(var(--background))',
+        border: '1px solid hsl(var(--border))',
+        color: 'hsl(var(--foreground))',
+      },
+    }"
   />
 </template>

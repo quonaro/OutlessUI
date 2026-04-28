@@ -10,10 +10,10 @@ export function useUpdateToken(
     mutationFn: ({ id, token }: { id: string; token: UpdateToken }) =>
       updateToken(id, token),
     onSuccess: () => {
-      toast.success('Токен успешно обновлен')
+      toast.success('Token updated successfully')
     },
     onError: (err) => {
-      toast.error('Ошибка обновления токена', {
+      toast.error('Failed to update token', {
         description: err.message,
       })
     },

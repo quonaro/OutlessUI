@@ -8,10 +8,10 @@ export function useActivateToken(
   return useMutation({
     mutationFn: (id: string) => activateToken(id),
     onSuccess: () => {
-      toast.success('Токен успешно активирован')
+      toast.success('Token activated successfully')
     },
     onError: (err) => {
-      toast.error('Ошибка активации токена', {
+      toast.error('Failed to activate token', {
         description: err.message,
       })
     },

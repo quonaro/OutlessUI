@@ -11,7 +11,7 @@ import { useRemoveToken } from '~/composables/tokens/useRemoveToken'
 import { useActivateToken } from '~/composables/tokens/useActivateToken'
 import { useUpdateToken } from '~/composables/tokens/useUpdateToken'
 import { useGroups } from '~/composables/groups/useGroups'
-import { Plus, MoreVertical, Eye, Pencil, Power, PowerOff, Trash2 } from 'lucide-vue-next'
+import { Plus, MoreVertical, Eye, Pencil, Power, PowerOff, Trash2, Copy } from 'lucide-vue-next'
 import UiButton from '~/components/ui/button/button.vue'
 import UiInput from '~/components/ui/input/input.vue'
 import UiCard from '~/components/ui/card/card.vue'
@@ -71,44 +71,44 @@ const createMutation = useCreateToken({
 
 const deleteMutation = useDeleteToken({
   onSuccess: () => {
-    toast.success('Токен успешно деактивирован')
+    toast.success('Token deactivated successfully')
     invalidate()
   },
   onError: (err) => {
-    toast.error('Ошибка деактивации токена', {
+    toast.error('Failed to deactivate token', {
       description: err.message,
     })
   },
 })
 const activateMutation = useActivateToken({
   onSuccess: () => {
-    toast.success('Токен успешно активирован')
+    toast.success('Token activated successfully')
     invalidate()
   },
   onError: (err) => {
-    toast.error('Ошибка активации токена', {
+    toast.error('Failed to activate token', {
       description: err.message,
     })
   },
 })
 const removeMutation = useRemoveToken({
   onSuccess: () => {
-    toast.success('Токен успешно удален')
+    toast.success('Token removed successfully')
     invalidate()
   },
   onError: (err) => {
-    toast.error('Ошибка удаления токена', {
+    toast.error('Failed to remove token', {
       description: err.message,
     })
   },
 })
 const updateMutation = useUpdateToken({
   onSuccess: () => {
-    toast.success('Токен успешно обновлен')
+    toast.success('Token updated successfully')
     invalidate()
   },
   onError: (err) => {
-    toast.error('Ошибка обновления токена', {
+    toast.error('Failed to update token', {
       description: err.message,
     })
   },
@@ -222,6 +222,20 @@ function viewAccessURL(token: Token) {
     return
   }
   showAccessURLDialog.value = true
+}
+
+async function copyAccessURL(token: Token) {
+  const url = resolveAccessURL(token)
+  if (!url) {
+    toast.error('Access URL is unavailable for this legacy token. Re-issue token to recover URL.')
+    return
+  }
+  try {
+    await navigator.clipboard?.writeText(url)
+    toast.success('URL copied to clipboard')
+  } catch {
+    toast.error('Failed to copy URL')
+  }
 }
 
 function statusBadge(token: Token): { label: string; cls: string } {
@@ -356,6 +370,10 @@ function handleEditGroupCheckboxChange(groupID: string, event: Event) {
                 <DropdownMenuItem @click="viewAccessURL(token)">
                   <Eye class="h-4 w-4 mr-2" />
                   View URL
+                </DropdownMenuItem>
+                <DropdownMenuItem @click="copyAccessURL(token)">
+                  <Copy class="h-4 w-4 mr-2" />
+                  Copy URL
                 </DropdownMenuItem>
                 <DropdownMenuItem @click="openEditDialog(token)">
                   <Pencil class="h-4 w-4 mr-2" />

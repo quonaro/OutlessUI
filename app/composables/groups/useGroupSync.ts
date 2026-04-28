@@ -113,8 +113,8 @@ export function useGroupSync(groupId: string) {
       if (typeof ev.processed === 'number') syncProcessed.value = ev.processed
       if (typeof ev.added_count === 'number') syncAddedCount.value = ev.added_count
       isSyncing.value = false
-      toast.success('Синхронизация завершена', {
-        description: `Добавлено ${syncAddedCount.value} нод`,
+      toast.success('Sync completed', {
+        description: `Added ${syncAddedCount.value} nodes`,
       })
       refreshAfterSyncJob()
       maybeUnsubscribe()
@@ -128,7 +128,7 @@ export function useGroupSync(groupId: string) {
       syncProcessed.value = typeof msg.processed === 'number' ? msg.processed : syncProcessed.value
       syncAddedCount.value = typeof msg.added_count === 'number' ? msg.added_count : syncAddedCount.value
       isSyncing.value = false
-      toast.error('Ошибка синхронизации', {
+      toast.error('Sync failed', {
         description: errMsg,
       })
       refreshAfterSyncJob()
@@ -142,7 +142,7 @@ export function useGroupSync(groupId: string) {
       syncAddedCount.value = typeof msg.added_count === 'number' ? msg.added_count : syncAddedCount.value
       isCancelled.value = true
       isSyncing.value = false
-      toast.warning('Синхронизация отменена')
+      toast.warning('Sync cancelled')
       refreshAfterSyncJob()
       maybeUnsubscribe()
     }

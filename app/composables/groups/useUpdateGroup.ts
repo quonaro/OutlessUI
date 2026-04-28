@@ -10,10 +10,10 @@ export function useUpdateGroup(
     mutationFn: ({ id, group }: { id: string; group: UpdateGroup }) =>
       updateGroup(id, group),
     onSuccess: () => {
-      toast.success('Группа успешно обновлена')
+      toast.success('Group updated successfully')
     },
     onError: (err) => {
-      toast.error('Ошибка обновления группы', {
+      toast.error('Failed to update group', {
         description: err.message,
       })
     },

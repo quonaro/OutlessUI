@@ -10,10 +10,10 @@ export function useCreatePublicSource(
     mutationFn: (payload: CreatePublicSource) =>
       createPublicSource(payload),
     onSuccess: () => {
-      toast.success('Public source успешно создан')
+      toast.success('Public source created successfully')
     },
     onError: (err) => {
-      toast.error('Ошибка создания public source', {
+      toast.error('Failed to create public source', {
         description: err.message,
       })
     },
