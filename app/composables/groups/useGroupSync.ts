@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/vue-query'
 import { ref, shallowRef } from 'vue'
+import { toast } from 'vue-sonner'
 import {
   type GroupSyncNodeEvent,
   type GroupSyncStateEvent,
@@ -29,7 +30,7 @@ export function useGroupSync(groupId: string) {
   }
 
   const isSyncing = ref(false)
-  const error = ref('')
+  const syncError = ref('')
   const syncTotal = ref(0)
   const syncProcessed = ref(0)
   const syncAddedCount = ref(0)
@@ -87,7 +88,7 @@ export function useGroupSync(groupId: string) {
       syncProcessed.value = ev.processed
       syncTotal.value = ev.total
       if (typeof ev.added_count === 'number') syncAddedCount.value = ev.added_count
-      if (ev.error) error.value = ev.error
+      if (ev.error) syncError.value = ev.error
       if (ev.synced_at) syncedAt.value = ev.synced_at
       const next = new Map<string, SyncNodeStatus>()
       for (const node of ev.nodes ?? []) {
@@ -112,6 +113,9 @@ export function useGroupSync(groupId: string) {
       if (typeof ev.processed === 'number') syncProcessed.value = ev.processed
       if (typeof ev.added_count === 'number') syncAddedCount.value = ev.added_count
       isSyncing.value = false
+      toast.success('Синхронизация завершена', {
+        description: `Добавлено ${syncAddedCount.value} нод`,
+      })
       refreshAfterSyncJob()
       maybeUnsubscribe()
       return
@@ -119,11 +123,14 @@ export function useGroupSync(groupId: string) {
     if (t === 'sync_error') {
       const errMsg = typeof msg.error === 'string' ? msg.error : 'sync failed'
       if (msg.group_id && msg.group_id !== groupId) return
-      error.value = errMsg
+      syncError.value = errMsg
       syncTotal.value = typeof msg.total === 'number' ? msg.total : syncTotal.value
       syncProcessed.value = typeof msg.processed === 'number' ? msg.processed : syncProcessed.value
       syncAddedCount.value = typeof msg.added_count === 'number' ? msg.added_count : syncAddedCount.value
       isSyncing.value = false
+      toast.error('Ошибка синхронизации', {
+        description: errMsg,
+      })
       refreshAfterSyncJob()
       maybeUnsubscribe()
       return
@@ -135,6 +142,7 @@ export function useGroupSync(groupId: string) {
       syncAddedCount.value = typeof msg.added_count === 'number' ? msg.added_count : syncAddedCount.value
       isCancelled.value = true
       isSyncing.value = false
+      toast.warning('Синхронизация отменена')
       refreshAfterSyncJob()
       maybeUnsubscribe()
     }
@@ -143,7 +151,7 @@ export function useGroupSync(groupId: string) {
   function startSync() {
     isSyncing.value = true
     isCancelled.value = false
-    error.value = ''
+    syncError.value = ''
     syncProcessed.value = 0
     syncTotal.value = 0
     syncAddedCount.value = 0
@@ -174,7 +182,7 @@ export function useGroupSync(groupId: string) {
   return {
     isSyncing,
     isCancelled,
-    error,
+    error: syncError,
     syncTotal,
     syncProcessed,
     syncAddedCount,

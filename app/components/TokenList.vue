@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { toast } from 'vue-sonner'
 import { useQueryClient } from '@tanstack/vue-query'
 import type { CreateToken, IssuedToken, Token } from '~/utils/schemas/token'
 import { EXPIRES_IN_OPTIONS } from '~/utils/schemas/token'
@@ -69,16 +70,48 @@ const createMutation = useCreateToken({
 })
 
 const deleteMutation = useDeleteToken({
-  onSuccess: invalidate,
+  onSuccess: () => {
+    toast.success('Токен успешно деактивирован')
+    invalidate()
+  },
+  onError: (err) => {
+    toast.error('Ошибка деактивации токена', {
+      description: err.message,
+    })
+  },
 })
 const activateMutation = useActivateToken({
-  onSuccess: invalidate,
+  onSuccess: () => {
+    toast.success('Токен успешно активирован')
+    invalidate()
+  },
+  onError: (err) => {
+    toast.error('Ошибка активации токена', {
+      description: err.message,
+    })
+  },
 })
 const removeMutation = useRemoveToken({
-  onSuccess: invalidate,
+  onSuccess: () => {
+    toast.success('Токен успешно удален')
+    invalidate()
+  },
+  onError: (err) => {
+    toast.error('Ошибка удаления токена', {
+      description: err.message,
+    })
+  },
 })
 const updateMutation = useUpdateToken({
-  onSuccess: invalidate,
+  onSuccess: () => {
+    toast.success('Токен успешно обновлен')
+    invalidate()
+  },
+  onError: (err) => {
+    toast.error('Ошибка обновления токена', {
+      description: err.message,
+    })
+  },
 })
 
 const groupNameById = computed<Record<string, string>>(() => {

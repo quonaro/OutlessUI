@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import Sidebar from '~/components/Sidebar.vue'
+import { Toaster } from 'vue-sonner'
+
+const colorMode = useColorMode()
 </script>
 
 <template>
@@ -13,4 +16,9 @@ import Sidebar from '~/components/Sidebar.vue'
       </main>
     </div>
   </div>
+  <Toaster
+    richColors
+    position="top-right"
+    :theme="colorMode.value as 'light' | 'dark' | undefined"
+  />
 </template>

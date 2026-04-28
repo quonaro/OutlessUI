@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { toast } from 'vue-sonner'
 import { useQueryClient } from '@tanstack/vue-query'
 import type { CreateNode, Node, UpdateNode } from '~/utils/schemas/node'
 import { useNodes } from '~/composables/nodes/useNodes'
@@ -33,22 +34,42 @@ const invalidate = () => queryClient.invalidateQueries({ queryKey: ['nodes'] })
 
 const createMutation = useCreateNode({
   onSuccess: () => {
+    toast.success('Нода успешно создана')
     showCreateDialog.value = false
     resetForm()
     invalidate()
+  },
+  onError: (err) => {
+    toast.error('Ошибка создания ноды', {
+      description: err.message,
+    })
   },
 })
 
 const updateMutation = useUpdateNode({
   onSuccess: () => {
+    toast.success('Нода успешно обновлена')
     showEditDialog.value = false
     resetForm()
     invalidate()
   },
+  onError: (err) => {
+    toast.error('Ошибка обновления ноды', {
+      description: err.message,
+    })
+  },
 })
 
 const deleteMutation = useDeleteNode({
-  onSuccess: invalidate,
+  onSuccess: () => {
+    toast.success('Нода успешно удалена')
+    invalidate()
+  },
+  onError: (err) => {
+    toast.error('Ошибка удаления ноды', {
+      description: err.message,
+    })
+  },
 })
 
 const visibleNodes = computed<Node[]>(() => {
