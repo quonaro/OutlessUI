@@ -10,6 +10,7 @@ import { useRemoveToken } from '~/composables/tokens/useRemoveToken'
 import { useActivateToken } from '~/composables/tokens/useActivateToken'
 import { useUpdateToken } from '~/composables/tokens/useUpdateToken'
 import { useGroups } from '~/composables/groups/useGroups'
+import { Plus, MoreVertical, Eye, Pencil, Power, PowerOff, Trash2 } from 'lucide-vue-next'
 import UiButton from '~/components/ui/button/button.vue'
 import UiInput from '~/components/ui/input/input.vue'
 import UiCard from '~/components/ui/card/card.vue'
@@ -17,6 +18,12 @@ import CardHeader from '~/components/ui/card/CardHeader.vue'
 import CardTitle from '~/components/ui/card/CardTitle.vue'
 import CardContent from '~/components/ui/card/CardContent.vue'
 import CardFooter from '~/components/ui/card/CardFooter.vue'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '~/components/ui/dropdown-menu'
 
 const config = useRuntimeConfig()
 const apiBase = (config.public.apiBase as string).replace(/\/+$/, '')
@@ -270,6 +277,7 @@ function handleEditGroupCheckboxChange(groupID: string, event: Event) {
   <div class="space-y-4">
     <div class="flex items-center justify-end gap-3">
       <UiButton @click="openCreateDialog">
+        <Plus class="h-4 w-4" />
         Issue Token
       </UiButton>
     </div>
@@ -305,47 +313,50 @@ function handleEditGroupCheckboxChange(groupID: string, event: Event) {
             </p>
           </div>
           <div class="flex shrink-0 gap-1">
-            <UiButton
-              variant="outline"
-              size="sm"
-              @click="viewAccessURL(token)"
-            >
-              View URL
-            </UiButton>
-            <UiButton
-              variant="outline"
-              size="sm"
-              @click="openEditDialog(token)"
-            >
-              Edit
-            </UiButton>
-            <UiButton
-              v-if="token.is_active"
-              variant="destructive"
-              size="sm"
-              :disabled="pendingDeactivateId === token.id"
-              @click="handleDeactivate(token)"
-            >
-              Deactivate
-            </UiButton>
-            <template v-else>
-              <UiButton
-                variant="default"
-                size="sm"
-                :disabled="pendingActivateId === token.id"
-                @click="handleActivate(token)"
-              >
-                Activate
-              </UiButton>
-              <UiButton
-                variant="destructive"
-                size="sm"
-                :disabled="pendingRemoveId === token.id"
-                @click="handleRemove(token)"
-              >
-                Remove
-              </UiButton>
-            </template>
+            <DropdownMenu>
+              <DropdownMenuTrigger as-child>
+                <UiButton variant="ghost" size="icon">
+                  <MoreVertical class="h-4 w-4" />
+                </UiButton>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem @click="viewAccessURL(token)">
+                  <Eye class="h-4 w-4 mr-2" />
+                  View URL
+                </DropdownMenuItem>
+                <DropdownMenuItem @click="openEditDialog(token)">
+                  <Pencil class="h-4 w-4 mr-2" />
+                  Edit
+                </DropdownMenuItem>
+                <template v-if="token.is_active">
+                  <DropdownMenuItem
+                    class="text-destructive focus:text-destructive"
+                    :disabled="pendingDeactivateId === token.id"
+                    @click="handleDeactivate(token)"
+                  >
+                    <PowerOff class="h-4 w-4 mr-2" />
+                    Deactivate
+                  </DropdownMenuItem>
+                </template>
+                <template v-else>
+                  <DropdownMenuItem
+                    :disabled="pendingActivateId === token.id"
+                    @click="handleActivate(token)"
+                  >
+                    <Power class="h-4 w-4 mr-2" />
+                    Activate
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    class="text-destructive focus:text-destructive"
+                    :disabled="pendingRemoveId === token.id"
+                    @click="handleRemove(token)"
+                  >
+                    <Trash2 class="h-4 w-4 mr-2" />
+                    Remove
+                  </DropdownMenuItem>
+                </template>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </CardContent>
